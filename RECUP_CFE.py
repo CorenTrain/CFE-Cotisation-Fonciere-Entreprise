@@ -1,3 +1,4 @@
+import shutil
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -37,6 +38,7 @@ def connect_to_website_with_credentials(driver, url, credentials_file):
     except:
         print("Pas encore connecté. Procédure de connexion en cours.")
 
+    # Connexion
     with open(credentials_file, "r") as file:
         lines = file.readlines()
         username = lines[0].strip()
@@ -62,10 +64,23 @@ def rename_downloaded_pdf(code, company_name, download_directory, siret):
     new_file_name = f"{code}_{company_name.replace(' ', '_')}_{
         siret.replace(' ', '')}_CFE_{year}.pdf"
     new_file = os.path.join(download_directory, new_file_name)
+    destination_directory = "./Documents/"
 
     if os.path.exists(original_file):
         os.rename(original_file, new_file)
         print(f"Le fichier PDF a été renommé en : {new_file}")
+
+        # Créer le répertoire de destination s'il n'existe pas
+        if not os.path.exists(destination_directory):
+            os.makedirs(destination_directory)
+            print(f"Le répertoire de destination '{
+                  destination_directory}' a été créé.")
+
+        # Déplacer le fichier renommé vers le répertoire de destination
+        shutil.move(new_file, os.path.join(
+            destination_directory, new_file_name))
+        print(f"Le fichier renommé a été déplacé vers : {
+              os.path.join(destination_directory, new_file_name)}")
     else:
         print("Le fichier 'doc.pdf' n'a pas été trouvé.")
 
@@ -109,6 +124,7 @@ def read_code(file_path):
 
 
 def process_avis_imposition_link(driver, code, name):
+    # Procédure pour un seul fichier
     def process_single_link(avis_imposition_link):
         wait_time = 30
         print("Début avis d'imposition:")
@@ -125,6 +141,7 @@ def process_avis_imposition_link(driver, code, name):
             By.XPATH, "following-sibling::td")
         siret = element_siret_value.text
 
+        # Vérification de la présence du lien "Tout le document"
         WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.LINK_TEXT, "Tout le document")))
         tout_document_link = driver.find_element(
@@ -136,10 +153,12 @@ def process_avis_imposition_link(driver, code, name):
         print("Vérification de la présence du PDF")
         wait = WebDriverWait(driver, 30)
         try:
+            # Tentative d'enregistrement du fichier PDF
             print_image = wait.until(EC.presence_of_element_located(
                 (By.XPATH, "//img[@alt='Imprimer - PDF 33 Ko']")))
             print_image.click()
         except:
+            # Gestion d'erreur, si le PDF n'est pas trouvé ou s'il n'y a pas de lien "Tout effacer"
             try:
                 wait = WebDriverWait(driver, 5)
                 tout_effacer_link = wait.until(EC.presence_of_element_located(
