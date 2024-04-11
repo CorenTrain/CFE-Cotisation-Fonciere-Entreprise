@@ -89,7 +89,7 @@ def read_siren_data(file_path):
     siren_data = []
     with open(file_path, "r") as file:
         for line in file:
-            parts = line.strip().split(",", 2)
+            parts = line.strip().split(";", 2)
             if len(parts) == 3:
                 company_name = parts[1].strip()
                 # Ajoutez le nom de l'entreprise à la liste
@@ -102,7 +102,7 @@ def extract_valid_siren_numbers(file_path):
 
     with open(file_path, "r") as file:
         for line in file:
-            parts = line.strip().split(",", 2)
+            parts = line.strip().split(";", 2)
             if len(parts) == 3:
                 siren_number = parts[0].strip()
                 # Vérifier que siren_number contient exactement 9 chiffres
@@ -115,7 +115,7 @@ def read_code(file_path):
     code_list = []
     with open(file_path, "r") as file:
         for line in file:
-            parts = line.strip().split(",", 2)
+            parts = line.strip().split(";", 2)
             if len(parts) == 3:
                 code = parts[2].strip()
                 # Ajouter le code à la liste
