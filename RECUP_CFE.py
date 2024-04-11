@@ -155,7 +155,7 @@ def process_avis_imposition_link(driver, code, name):
         try:
             # Tentative d'enregistrement du fichier PDF
             print_image = wait.until(EC.presence_of_element_located(
-                (By.XPATH, "//img[@alt='Imprimer - PDF 33 Ko']")))
+                (By.XPATH, "//img[contains(@alt, 'Imprimer - PDF')]")))
             print_image.click()
         except:
             # Gestion d'erreur, si le PDF n'est pas trouvé ou s'il n'y a pas de lien "Tout effacer"
