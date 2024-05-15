@@ -126,7 +126,6 @@ def read_code(file_path):
 def process_avis_imposition_link(driver, code, name):
     # Procédure pour un seul fichier
     def process_single_link(avis_imposition_link):
-        wait_time = 30
         print("Début avis d'imposition:")
         avis_imposition_link.click()
 
@@ -135,7 +134,7 @@ def process_avis_imposition_link(driver, code, name):
         demandes_impression_image.click()
 
         element_siret_label = driver.find_element(
-            By.XPATH, "//td[text()='N° SIRET :']")
+            By.XPATH, "//td[contains(text(), 'N° SIRET')]")
 
         element_siret_value = element_siret_label.find_element(
             By.XPATH, "following-sibling::td")
@@ -187,16 +186,23 @@ def process_avis_imposition_link(driver, code, name):
         tout_effacer_link.click()
         print("Le lien 'Tout effacer' a été cliqué avec succès.")
 
+        sleep(2)
         rename_downloaded_pdf(code,  name, os.getcwd(), siret)
 
         driver.close()
         driver.switch_to.window(driver.window_handles[1])
         driver.back()
-        sleep(10)
+        sleep(2)
         return True
 
-    WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located((By.LINK_TEXT, "Avis d'imposition")))
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.LINK_TEXT, "Avis d'imposition")))
+    except:
+        driver.quit()
+        print("Pas d'avis d'imposition")
+        return
+
     avis_imposition_links = driver.find_elements(
         By.LINK_TEXT, "Avis d'imposition")
     print(f"Nombre d'avis d'imposition: {len(avis_imposition_links)}")
