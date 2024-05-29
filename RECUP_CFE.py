@@ -60,7 +60,7 @@ def connect_to_website_with_credentials(driver, url, credentials_file):
 
 
 def rename_downloaded_pdf(code, company_name, download_directory, siret):
-    year = datetime.date.today().year - 1
+    year = datetime.date.today().year
     original_file = os.path.join(download_directory, "doc.pdf")
     new_file_name = f"{code}_{company_name.replace(' ', '_')}_{
         siret.replace(' ', '')}_CFE_{year}.pdf"
@@ -223,6 +223,8 @@ def open_avis_cfe(driver, siren):
     driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
 
     print("clique sur Avis CFE")
+    WebDriverWait(driver, 5).until(EC.presence_of_element_located(
+        (By.XPATH, "//a[contains(text(), 'Avis CFE')]")))
     avis_cfe_link = driver.find_element(
         By.XPATH, "//a[contains(text(), 'Avis CFE')]")
     avis_cfe_link.click()
