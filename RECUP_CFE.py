@@ -5,6 +5,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from time import sleep
+import logging
 import datetime
 import os
 
@@ -246,6 +247,7 @@ def open_avis_cfe(driver, siren):
         print("Clique sur Accès aux avis de CFE")
     except:
         print("Pas de CFE, passage au SIREN suivant.")
+        logging.info(";PAS DE CFE; SIREN; " + siren)
         driver.quit()
         return False
     return True
@@ -258,6 +260,8 @@ def process_siren(driver, siren, name, code):
 
 
 def main():
+    logging.basicConfig(filename='error_log.txt',
+                        level=logging.ERROR, format='%(asctime)s - %(message)s')
 
     print("Création de la liste de SIREN")
     siren_numbers = extract_valid_siren_numbers(file_path)
