@@ -327,13 +327,10 @@ class Program:
 
         if os.path.exists(original_file):
             os.rename(original_file, new_file)
-            print(f"Le fichier PDF a été renommé en : {new_file}")
-
             # Créer le répertoire de destination s'il n'existe pas
             if not os.path.exists(destination_directory):
                 os.makedirs(destination_directory)
                 print(f"Le répertoire de destination '{destination_directory}' a été créé.")
-
             # Déplacer le fichier renommé vers le répertoire de destination
             shutil.move(new_file, os.path.join(destination_directory, new_file_name))
             print(f"Le fichier renommé a été déplacé vers :"
