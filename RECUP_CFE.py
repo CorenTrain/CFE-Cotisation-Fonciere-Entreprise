@@ -232,7 +232,7 @@ class Program:
 
         # Procédure pour un seul fichier
         def process_single_link(avis_imposition_link):
-            print("Début avis d'imposition:")
+            print("Clic sur le lien d'avis d'imposition...")
             avis_imposition_link.click()
 
             self.driver.find_element(By.XPATH, '//img[@alt="Demandes d\'impression"]').click()
@@ -327,8 +327,6 @@ class Program:
 
         if os.path.exists(original_file):
             os.rename(original_file, new_file)
-            print(f"Le fichier PDF a été renommé en : {new_file}")
-
             # Créer le répertoire de destination s'il n'existe pas
             if not os.path.exists(destination_directory):
                 os.makedirs(destination_directory)
@@ -367,6 +365,7 @@ def main():
     Returns:
     None
     """
+    print("Démarrage du script...")
     logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
     app = Program()
     compteur = 1
