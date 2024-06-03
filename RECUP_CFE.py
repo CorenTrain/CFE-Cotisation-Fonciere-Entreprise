@@ -189,6 +189,11 @@ class Program:
         self.driver.find_element(By.NAME, "button.submitValider").click()
 
         window_handles = self.driver.window_handles
+
+        if len(window_handles) < 2:
+            print("SIREN non accessible.")
+            logging.info('SIREN - %s - INACCESSIBLE', siren)
+            return False
         self.driver.switch_to.window(window_handles[-1])
 
         # Tente de cliquer sur Accès aux avis de CFE et s'il ne fonctionne pas, passe au SIREN
@@ -346,6 +351,8 @@ class Program:
         Returns:
             None
         """
+        if len(self.driver.window_handles) < 2:
+            return
         self.driver.close()
         self.driver.switch_to.window(self.driver.window_handles[0])
 
