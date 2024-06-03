@@ -114,7 +114,8 @@ class Program:
         """
         with open(self.file_path, "r", encoding="utf-8") as file:
             next(file)
-            return [tuple(line.strip().split(";", 3)[:3]) for line in file if len(line.strip().split(";", 3)) == 3]
+            return [tuple(line.strip().split(";", 3)[:3])
+                    for line in file if len(line.strip().split(";", 3)) == 3]
 
     def connect_to_website_with_credentials(self):
         """
@@ -199,8 +200,8 @@ class Program:
             return self.open_avis_cfe(siren)
 
         try:
-            self.driver.find_element(
-                By.XPATH, "//span[contains(text(), 'Accès aux avis de CFE')]").click()
+            WebDriverWait(self.driver, 0.5).until(EC.presence_of_element_located(
+                (By.XPATH, "//span[contains(text(), 'Accès aux avis de CFE')]"))).click()
         except TimeoutException:
             print("Pas de CFE, passage au SIREN suivant.")
             logging.info('PAS DE CFE - SIREN - %s', siren)
