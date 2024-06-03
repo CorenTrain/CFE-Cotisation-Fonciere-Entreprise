@@ -244,9 +244,13 @@ class Program:
             print("Clic sur le lien d'avis d'imposition...")
             avis_imposition_link.click()
 
-            self.driver.find_element(By.XPATH, '//img[@alt="Demandes d\'impression"]').click()
-            element_siret_label = self.driver.find_element(
-                By.XPATH, "//td[contains(text(), 'N° SIRET')]")
+            try:
+                WebDriverWait(self.driver, 5).until(EC.visibility_of_element_located((
+                    By.XPATH, '//img[@alt="Demandes d\'impression"]'))).click()
+                element_siret_label = self.driver.find_element(
+                    By.XPATH, "//td[contains(text(), 'N° SIRET')]")
+            except NoSuchElementException:
+                return False
 
             # Récupère le numéro de SIRET
             siret = element_siret_label.find_element(By.XPATH, "following-sibling::td").text
