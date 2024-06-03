@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 from datetime import datetime
+from itertools import islice
 from time import sleep
 
 from selenium import webdriver
@@ -57,6 +58,7 @@ class Program:
         self.credentials_file = os.path.join(self.script_path, "identifiants.txt")
         self.data = self.read_data()
         self.creds = self.read_creds()
+        print(self.creds)
 
     def __del__(self):
         self.driver.quit()
@@ -92,19 +94,14 @@ class Program:
 
     def read_creds(self):
         """
-        Reads the credentials from the `credentials_file` and returns them as a list.
+        Reads the login credentials from the file and returns them as a list.
 
         Returns:
             list: A list containing the first two lines of the `credentials_file`, with leading
             and trailing whitespace removed.
         """
-        creds = []
         with open(self.credentials_file, "r", encoding="utf-8") as file:
-            lines = file.readlines()
-            creds.append(lines[0].strip())
-            creds.append(lines[1].strip())
-
-        return creds
+            return [line.strip() for line in islice(file, 2)]
 
     def read_data(self):
         """
@@ -115,20 +112,9 @@ class Program:
             list: A list of tuples, where each tuple contains the SIREN (a string), company name
             (a string), and dossier number (a string).
         """
-        file_path = self.file_path
-        info_list = []
-
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(self.file_path, "r", encoding="utf-8") as file:
             next(file)
-            for line in file:
-                parts = line.strip().split(";", 3)
-                if len(parts) == 3:
-                    siren = parts[0].strip()
-                    company_name = parts[1].strip()
-                    dossier_number = parts[2].strip()
-                    info_list.append((siren, company_name, dossier_number))
-
-        return info_list
+            return [tuple(line.strip().split(";", 3)[:3]) for line in file if len(line.strip().split(";", 3)) == 3]
 
     def connect_to_website_with_credentials(self):
         """
@@ -176,8 +162,9 @@ class Program:
         Returns:
             None
         """
-        if self.open_avis_cfe(siren):
-            self.process_avis_imposition_link(code, name)
+        if not self.open_avis_cfe(siren):
+            return
+        self.process_avis_imposition_link(code, name)
 
     def open_avis_cfe(self, siren):
         """
@@ -191,13 +178,11 @@ class Program:
         """
         self.driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
 
-        print("clic sur Avis CFE")
         WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
             (By.XPATH, "//a[contains(text(), 'Avis CFE')]"))).click()
 
-        for i in range(9):
-            siren_input = self.driver.find_element(By.ID, f"siren{i}")
-            siren_input.send_keys(siren[i])
+        for i, digit in enumerate(siren):
+            self.driver.find_element(By.ID, f"siren{i}").send_keys(digit)
 
         # Clic sur le bouton consulter
         self.driver.find_element(By.NAME, "button.submitValider").click()
@@ -214,8 +199,8 @@ class Program:
             return self.open_avis_cfe(siren)
 
         try:
-            WebDriverWait(self.driver, 0.5).until(EC.presence_of_element_located(
-                (By.XPATH, "//span[contains(text(), 'Accès aux avis de CFE')]"))).click()
+            self.driver.find_element(
+                By.XPATH, "//span[contains(text(), 'Accès aux avis de CFE')]").click()
         except TimeoutException:
             print("Pas de CFE, passage au SIREN suivant.")
             logging.info('PAS DE CFE - SIREN - %s', siren)
@@ -234,15 +219,12 @@ class Program:
           """
         def delete_and_restart():
             try:
-                WebDriverWait(self.driver, 2).until(EC.presence_of_element_located(
-                    (By.XPATH, "//a[contains(text(), 'Tout effacer')]"))).click()
-            except TimeoutException:
+                self.driver.find_element(By.XPATH, "//a[contains(text(), 'Tout effacer')]").click()
+            except NoSuchElementException:
                 pass
 
-            WebDriverWait(self.driver, 2).until(EC.presence_of_element_located(
-                (By.XPATH, "//span[contains(text(), 'Fermer')]"))).click()
+            self.driver.find_element(By.XPATH, "//span[contains(text(), 'Fermer')]").click()
             print("Erreur lors de la récupération du fichier, nouvelle tentative.")
-            # self.driver.close()
             self.driver.switch_to.window(self.driver.window_handles[1])
             self.driver.back()
             return False
@@ -315,8 +297,7 @@ class Program:
         while i < len(avis_imposition_links):
             WebDriverWait(self.driver, 10).until(
                 EC.visibility_of_element_located((By.LINK_TEXT, "Avis d'imposition")))
-            avis_imposition_links = self.driver.find_elements(
-                By.LINK_TEXT, "Avis d'imposition")
+            avis_imposition_links = self.driver.find_elements(By.LINK_TEXT, "Avis d'imposition")
             if process_single_link(avis_imposition_links[i]):
                 i = i + 1
 
@@ -336,14 +317,12 @@ class Program:
         Raises:
             None
         """
-        print("1")
         year = datetime.now().year
         original_file = os.path.join(self.script_path, "Documents", "doc.pdf")
         new_file_name = f"{code}_{company_name.replace(' ', '_')}_" \
             f"{siret.replace(' ', '')}_CFE_{year}.pdf"
         new_file = os.path.join(download_directory, new_file_name)
         destination_directory = os.path.join(self.script_path, "Documents")
-        print("2")
 
         if os.path.exists(original_file):
             os.rename(original_file, new_file)
@@ -389,7 +368,7 @@ def main():
     """
     logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
     app = Program()
-    compteur = 0
+    compteur = 1
 
     # Pour chacun des SIREN
     for data in app.data:
