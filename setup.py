@@ -1,5 +1,5 @@
-import sys
-from cx_Freeze import setup, Executable
+"""" Setup script to generate an executable. """
+from cx_Freeze import Executable, setup
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {
