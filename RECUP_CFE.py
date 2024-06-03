@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+from curses import echo
 from datetime import datetime
 from itertools import islice
 from time import sleep
@@ -229,7 +230,11 @@ class Program:
             except NoSuchElementException:
                 pass
 
-            self.driver.find_element(By.XPATH, "//span[contains(text(), 'Fermer')]").click()
+            try:
+                WebDriverWait(self.driver, 2).until(EC.visibility_of_element_located(
+                    (By.XPATH, "//span[contains(text(), 'Fermer')]"))).click()
+            except TimeoutException:
+                self.driver.close()
             print("Erreur lors de la récupération du fichier, nouvelle tentative.")
             self.driver.switch_to.window(self.driver.window_handles[1])
             self.driver.back()
@@ -264,7 +269,6 @@ class Program:
                     text_div = self.driver.find_element(
                         By.XPATH, "//td[contains(text(),'Demandé le')]")
                     if "En cours" not in text_div.text and "moins" not in text_div.text:
-                        temp = text_div.text
                         break
                 except StaleElementReferenceException:
                     pass
@@ -272,7 +276,7 @@ class Program:
                     return delete_and_restart()
                 sleep(1)
 
-            if "En erreur" in temp:
+            if "En erreur" in text_div.text:
                 return delete_and_restart()
 
             try:
