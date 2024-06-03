@@ -3,7 +3,6 @@ import logging
 import os
 import shutil
 import sys
-from curses import echo
 from datetime import datetime
 from itertools import islice
 from time import sleep
