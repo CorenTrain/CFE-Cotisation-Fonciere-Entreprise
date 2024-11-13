@@ -39,13 +39,13 @@ class Program:
         read_creds (self): Reads the login credentials from the file and returns them as a list.
         read_data (self): Reads data from a file and returns a list of tuples containing the SIREN
         numbers, company names, and dossier numbers.
-        connect_to_website_with_credentials (self): Connects to the website using the provided
+        connexion_site (self): Connects to the website using the provided
         credentials.
         process_avis_imposition_link (self, code, name): Processes a single link for the avis
         d'imposition.
         open_avis_cfe (self, siren): Opens the Avis CFE page and enters the SIREN number to access
         the CFE information.
-        process_siren (self, siren, name, code): Processes a SIREN, name, and code by opening the
+        traiter_siren (self, siren, name, code): Processes a SIREN, name, and code by opening the
         avis de CFE and processing the avis imposition link.
     """
 
@@ -58,7 +58,7 @@ class Program:
         self.url = "https://cfspro-idp.impots.gouv.fr/oauth2/authorize?[...]"
         self.file_path = os.path.join(self.script_path, "SIREN.TXT")
         self.credentials_file = os.path.join(self.script_path, "identifiants.txt")
-        self.data = self.read_data()
+        self.donnees = self.read_data()
         self.creds = self.read_creds()
         print(self.creds)
         self.driver = self.initialize_driver()
@@ -120,7 +120,7 @@ class Program:
             return [tuple(line.strip().split(";", 3)[:3])
                     for line in file if len(line.strip().split(";", 3)) == 3]
 
-    def connect_to_website_with_credentials(self):
+    def connexion_site(self):
         """
         Connects to the website using the provided credentials.
 
@@ -133,9 +133,6 @@ class Program:
 
         Parameters:
             self (Program): The Program instance.
-
-        Returns:
-            None
         """
         print("Ouverture de la page...")
         self.driver.get(self.url)
@@ -154,24 +151,20 @@ class Program:
         self.driver.find_element(By.NAME, "password").send_keys(self.creds[1])
         self.driver.find_element(By.XPATH, "//button[contains(text(), 'Connexion')]").click()
 
-    def process_siren(self, siren, name, code):
+    def traiter_siren(self, siren, nom_entreprise, code_dossier):
         """
-        Process a SIREN, name, and code by opening the avis de CFE and processing the avis
-        imposition link.
+        Traite un SIREN, un nom d'entreprise, et un code de dossier en ouvrant l'avis de CFE
+        et en accédant au lien d'avis d'imposition associé.
 
         Args:
-            siren (str): The SIREN number.
-            name (str): The name of the company.
-            code (str): The dossier number.
-
-        Returns:
-            None
+            siren (str): Numéro SIREN de l'entreprise.
+            nom_entreprise (str): Nom de l'entreprise.
+            code_dossier (str): Code de dossier associé.
         """
-        if not self.open_avis_cfe(siren):
-            return
-        self.traiter_lien_avis_imposition(code, name, siren)
+        if self.ouvrir_avis_cfe(siren):
+            self.traiter_lien_avis_imposition(code_dossier, nom_entreprise, siren)
 
-    def open_avis_cfe(self, siren):
+    def ouvrir_avis_cfe(self, siren):
         """
         Opens the Avis CFE page and enters the SIREN number to access the CFE information.
 
@@ -185,7 +178,7 @@ class Program:
             self.driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
         except TimeoutException:
             print("Timeout lors de l'accès à la page d'accueil.")
-            return self.open_avis_cfe(siren)
+            return self.ouvrir_avis_cfe(siren)
 
         WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
             (By.XPATH, "//a[contains(text(), 'Avis CFE')]"))).click()
@@ -210,7 +203,7 @@ class Program:
             WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
                 (By.XPATH, "//*[contains(text(), 'Accueil du compte fiscal des professionnels')]")))
         except TimeoutException:
-            return self.open_avis_cfe(siren)
+            return self.ouvrir_avis_cfe(siren)
 
         try:
             # Sur la page https://cfspro.impots.gouv.fr/adelie2mapi/xhtml/accueil/accueil.xhtml
@@ -289,92 +282,77 @@ class Program:
         print(f"Le fichier renommé a été déplacé vers : {
               os.path.join(dossier_destination, nouveau_nom)}")
 
-    def close_windows(self):
+    def fermer_fenetres(self):
         """
-        Closes all the windows in the browser.
-
-        Returns:
-            None
+        Ferme toutes les fenêtres du navigateur, sauf la principale.
         """
-        if len(self.driver.window_handles) < 2:
-            return
-        self.driver.close()
-        self.driver.switch_to.window(self.driver.window_handles[0])
+
+        if len(self.driver.window_handles) > 1:
+            self.driver.close()
+            self.driver.switch_to.window(self.driver.window_handles[0])
 
 
-# Help in french
-def display_help():
+def afficher_aide():
     """
-    Displays the help message for the script.
-
-    Parameters:
-    None
-
-    Returns:
-    None
+    Affiche le message d'aide pour le script.
     """
-    print("\nUsage : python recup_cfe.py [acomptes|imposition] \n")
-    print("Ce script permet de récupérer les avis d'imposition de la CFE pour un ensemble de",
-          "SIREN donnés.")
-    print("Il prend en entrée un fichier nommé 'SIREN.TXT' contenant les SIREN,",
-          "noms d'entreprise, et codes.")
-    print("\nLe fichier 'SIREN.TXT' doit être au format suivant :")
-    print("    Siren;Nom;Code Dossier\n")
-    print("Le script prend également en entrée un fichier nommé 'identifiants.txt' contenant",
-          "les identifiants.")
-    print("Le fichier 'identifiants.txt' doit être au format suivant :")
-    print("    identifiant")
-    print("    mot_de_passe")
-    print("\nLe script doit être exécuté avec un argument 'acomptes' ou 'imposition' pour choisir",
-          "le search_type de document à récupérer.\n")
-    print("Exemple d'utilisation :")
-    print("    python recup_cfe.py acomptes")
-    print("    python recup_cfe.py imposition\n")
+
+    aide_message = """
+        Usage : python recup_cfe.py [acomptes|imposition]
+
+        Ce script récupère les avis d'imposition de la CFE pour un ensemble de SIREN fournis.
+
+        Entrées :
+        - Fichier 'SIREN.TXT' contenant les SIREN, noms d'entreprise et codes, au format :
+            Siren;Nom;Code Dossier
+
+        - Fichier 'identifiants.txt' avec les identifiants et le mot de passe, au format :
+            identifiant
+            mot_de_passe
+
+        Argument :
+        - 'acomptes' ou 'imposition' : spécifie le type de document à récupérer.
+
+        Exemples d'utilisation :
+            python recup_cfe.py acomptes
+            python recup_cfe.py imposition
+    """
+    print(aide_message)
 
 
 def main():
     """
-    The main function that initializes the logging, creates an instance of the Program class, and
-    iterates over the data to process each SIREN, name, and code. It prints the counter, code,
-    name, and siren for each iteration. It then calls the connect_to_website_with_credentials
-    method of the Program class to connect to the website with credentials, and calls the
-    process_siren method of the Program class to process the SIREN, name, and code. The script
-    is completed when all the SIRENs have been processed.
-
-    Parameters:
-    None
-
-    Returns:
-    None
+    Fonction principale qui initialise le journal de logs, crée une instance de la classe Program,
+    et traite chaque SIREN, nom, et code. Pour chaque entrée, elle affiche le compteur et les
+    détails. Elle connecte ensuite l'application au site web avec les identifiants et lance
+    le traitement des données.
     """
-    if len(sys.argv) != 2 or sys.argv[1] not in ["acomptes", "imposition"] or \
-            sys.argv[1] in ["-h", "--help"]:
-        display_help()
+
+    # Validation des arguments
+    argument = sys.argv[1] if len(sys.argv) == 2 else None
+    if argument not in ["acomptes", "imposition"] and argument not in ["-h", "--help"]:
+        afficher_aide()
         return
 
     try:
+        # Initialisation du logging et démarrage de l'application
         print("Démarrage du script...")
         logging.basicConfig(filename='log.txt', level=logging.INFO,
                             format='%(asctime)s - %(message)s')
+
         app = Program()
         print("Initialisation terminée.")
-        compteur = 1
 
-        # Pour chacun des SIREN
-        for data in app.data:
-            siren = data[0]
-            name = data[1]
-            code = data[2]
-            print(f"\nCompteur: {compteur} Code: {code} Name: {name} Siren: {siren}")
+        # Traitement de chaque SIREN
+        for compteur, (siren, nom, code) in enumerate(app.donnees, start=1):
+            print(f"\nCompteur: {compteur} | Code: {code} | Nom: {nom} | SIREN: {siren}")
+            app.connexion_site()
+            app.traiter_siren(siren, nom, code)
+            app.fermer_fenetres()
 
-            app.connect_to_website_with_credentials()
-            app.process_siren(siren, name, code)
-            app.close_windows()
-            compteur = compteur + 1
     except Exception as e:
-        # En cas d'erreur, affiche l'erreur et la log
         print(f"Erreur : {e}")
-        logging.exception('Erreur : %s', e)
+        logging.exception("Erreur lors de l'exécution : %s", e)
 
     print("Script terminé !")
 
