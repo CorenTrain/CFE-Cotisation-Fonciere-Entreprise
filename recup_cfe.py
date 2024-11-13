@@ -243,7 +243,7 @@ class Program:
         print("Arrivée sur la page des avis d'imposition.")
 
         try:
-            lignes = WebDriverWait(self.driver, 2).until(
+            lignes = WebDriverWait(self.driver, 3).until(
                 EC.presence_of_all_elements_located((By.XPATH, "//tbody/tr"))
             )
         except TimeoutException:
@@ -257,7 +257,7 @@ class Program:
                 print("Clic sur le lien d'avis d'imposition.")
                 siret = f"{siren}{cellules[4].text.strip()}"
                 self.renommer_pdf_telecharge(code, nom, self.script_path, siret)
-                sleep(0.5)
+                sleep(1)
 
     def renommer_pdf_telecharge(self, code, nom_entreprise, dossier_telechargement, siret):
         """
