@@ -1,4 +1,5 @@
 """Programme de recuperation des CFE."""
+import glob
 import logging
 import os
 import shutil
@@ -8,9 +9,7 @@ from itertools import islice
 from time import sleep
 
 from selenium import webdriver
-from selenium.common.exceptions import (NoSuchElementException,
-                                        StaleElementReferenceException,
-                                        TimeoutException)
+from selenium.common.exceptions import (TimeoutException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
@@ -51,14 +50,18 @@ class Program:
     """
 
     def __init__(self):
+        if sys.argv[1] == "acomptes":
+            self.acomptes = True
+        elif sys.argv[1] == "imposition":
+            self.acomptes = False
         self.script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
         self.url = "https://cfspro-idp.impots.gouv.fr/oauth2/authorize?[...]"
-        self.driver = self.initialize_driver()
         self.file_path = os.path.join(self.script_path, "SIREN.TXT")
         self.credentials_file = os.path.join(self.script_path, "identifiants.txt")
         self.data = self.read_data()
         self.creds = self.read_creds()
         print(self.creds)
+        self.driver = self.initialize_driver()
 
     def __del__(self):
         self.driver.quit()
@@ -76,7 +79,7 @@ class Program:
                 - Set the download folder to the current directory
                 - Hide the download manager when starting
                 - Set the download directory to the current directory
-                - Never ask to save files with the application/pdf MIME type
+                - Never ask to save files with the application/pdf MIME search_type
                 - Disable PDF.js
         """
         current_directory = os.path.join(self.script_path, "Documents")
@@ -134,11 +137,12 @@ class Program:
         Returns:
             None
         """
+        print("Ouverture de la page...")
         self.driver.get(self.url)
 
         # Vérification si déjà connecté
         try:
-            WebDriverWait(self.driver, 2).until(
+            WebDriverWait(self.driver, 0.5).until(
                 EC.presence_of_element_located((By.ID, "identifiant_après_connexion")))
             print("Déjà connecté.")
             return
@@ -165,7 +169,7 @@ class Program:
         """
         if not self.open_avis_cfe(siren):
             return
-        self.process_avis_imposition_link(code, name)
+        self.traiter_lien_avis_imposition(code, name, siren)
 
     def open_avis_cfe(self, siren):
         """
@@ -177,7 +181,11 @@ class Program:
         Returns:
             bool: True if the CFE information is successfully accessed, False otherwise.
         """
-        self.driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
+        try:
+            self.driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
+        except TimeoutException:
+            print("Timeout lors de l'accès à la page d'accueil.")
+            return self.open_avis_cfe(siren)
 
         WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
             (By.XPATH, "//a[contains(text(), 'Avis CFE')]"))).click()
@@ -205,151 +213,81 @@ class Program:
             return self.open_avis_cfe(siren)
 
         try:
+            # Sur la page https://cfspro.impots.gouv.fr/adelie2mapi/xhtml/accueil/accueil.xhtml
+            # clique à droite sur accès aux avis de CFE
             WebDriverWait(self.driver, 0.5).until(EC.presence_of_element_located(
-                (By.XPATH, "//span[contains(text(), 'Accès aux avis de CFE')]"))).click()
+                (By.XPATH, "//a[@class='custom_bouton_cfe']"))).click()
         except TimeoutException:
-            print("Pas de CFE, passage au SIREN suivant.")
+            print(
+                "Pas de CFE, passage au SIREN suivant.",
+                "(Pas de bouton CFE (//a[@class='custom_bouton_cfe']))"
+            )
             logging.info('PAS DE CFE - SIREN - %s', siren)
             return False
+
         return True
 
-    def process_avis_imposition_link(self, code, name):
+    def traiter_lien_avis_imposition(self, code, nom, siren):
         """
-          Process a single link for the avis d'imposition.
-
-          Args:
-              avis_imposition_link (WebElement): The avis imposition link to process.
-
-          Returns:
-              bool: True if the link was successfully processed, False otherwise.
-          """
-        def delete_and_restart():
-            try:
-                self.driver.find_element(By.XPATH, "//a[contains(text(), 'Tout effacer')]").click()
-            except NoSuchElementException:
-                pass
-
-            try:
-                WebDriverWait(self.driver, 2).until(EC.visibility_of_element_located(
-                    (By.XPATH, "//span[contains(text(), 'Fermer')]"))).click()
-            except TimeoutException:
-                self.driver.close()
-            print("Erreur lors de la récupération du fichier, nouvelle tentative.")
-            self.driver.switch_to.window(self.driver.window_handles[1])
-            self.driver.back()
-            return False
-
-        # Procédure pour un seul fichier
-        def process_single_link(avis_imposition_link):
-            print("Clic sur le lien d'avis d'imposition...")
-            avis_imposition_link.click()
-
-            try:
-                WebDriverWait(self.driver, 5).until(EC.visibility_of_element_located((
-                    By.XPATH, '//img[@alt="Demandes d\'impression"]'))).click()
-                element_siret_label = self.driver.find_element(
-                    By.XPATH, "//td[contains(text(), 'N° SIRET')]")
-            except NoSuchElementException:
-                return False
-
-            # Récupère le numéro de SIRET
-            siret = element_siret_label.find_element(By.XPATH, "following-sibling::td").text
-
-            # Vérification de la présence du lien "Tout le document"
-            WebDriverWait(self.driver, 5).until(
-                EC.visibility_of_element_located((By.LINK_TEXT, "Tout le document"))).click()
-
-            self.driver.switch_to.window(self.driver.window_handles[-1])
-
-            try:
-                text_div = WebDriverWait(self.driver, 5).until(EC.visibility_of_element_located((
-                    By.XPATH, "//td[contains(text(),'Demandé le')]")))
-            except NoSuchElementException:
-                return delete_and_restart()
-
-            while True:
-                try:
-                    text_div = self.driver.find_element(
-                        By.XPATH, "//td[contains(text(),'Demandé le')]")
-                    if "En cours" not in text_div.text and "moins" not in text_div.text:
-                        break
-                except StaleElementReferenceException:
-                    pass
-                except NoSuchElementException:
-                    return delete_and_restart()
-                sleep(1)
-
-            if "En erreur" in text_div.text:
-                return delete_and_restart()
-
-            try:
-                WebDriverWait(self.driver, 1).until(EC.presence_of_element_located(
-                    (By.XPATH, "//img[contains(@alt, 'Imprimer - PDF')]"))).click()
-                WebDriverWait(self.driver, 1).until(EC.presence_of_element_located(
-                    (By.XPATH, "//a[contains(text(), 'Tout effacer')]"))).click()
-                print("Fichier téléchargé.")
-            except (NoSuchElementException, TimeoutException):
-                return delete_and_restart()
-
-            self.rename_downloaded_pdf(code, name, self.script_path, siret)
-            self.driver.close()
-            self.driver.switch_to.window(self.driver.window_handles[1])
-            self.driver.back()
-            return True
-        # Boucle sur tous les liens de documents
-        try:
-            WebDriverWait(self.driver, 5).until(
-                EC.visibility_of_element_located((By.LINK_TEXT, "Avis d'imposition")))
-        except TimeoutException:
-            print("Pas d'avis d'imposition")
-            return
-
-        avis_imposition_links = self.driver.find_elements(By.LINK_TEXT, "Avis d'imposition")
-        print(f"Nombre d'avis d'imposition: {len(avis_imposition_links)}")
-        i = 0
-        while i < len(avis_imposition_links):
-            WebDriverWait(self.driver, 10).until(
-                EC.visibility_of_element_located((By.LINK_TEXT, "Avis d'imposition")))
-            avis_imposition_links = self.driver.find_elements(By.LINK_TEXT, "Avis d'imposition")
-            if process_single_link(avis_imposition_links[i]):
-                i = i + 1
-
-    def rename_downloaded_pdf(self, code, company_name, download_directory, siret):
-        """
-        Renames a downloaded PDF file by appending relevant information to the file name.
+        Traite un lien pour un avis d'imposition en renvoyant un PDF renommé.
 
         Args:
-            code (str): The code associated with the PDF file.
-            company_name (str): The name of the company.
-            download_directory (str): The directory where the PDF file is downloaded.
-            siret (str): The SIRET number of the company.
-
-        Returns:
-            None
-
-        Raises:
-            None
+            code (str): Code associé à l'avis d'imposition.
+            nom (str): Nom de l'entreprise.
+            siren (str): Numéro SIREN de l'entreprise.
         """
-        year = datetime.now().year
-        original_file = os.path.join(self.script_path, "Documents", "doc.pdf")
-        new_file_name = f"{code}_{company_name.replace(' ', '_')}_" \
-            f"{siret.replace(' ', '')}_CFE_{year}.pdf"
-        new_file = os.path.join(download_directory, new_file_name)
-        destination_directory = os.path.join(self.script_path, "Documents")
+        print("Arrivée sur la page des avis d'imposition.")
 
-        if os.path.exists(original_file):
-            os.rename(original_file, new_file)
-            # Créer le répertoire de destination s'il n'existe pas
-            if not os.path.exists(destination_directory):
-                os.makedirs(destination_directory)
-                print(f"Le répertoire de destination '{destination_directory}' a été créé.")
+        try:
+            lignes = WebDriverWait(self.driver, 2).until(
+                EC.presence_of_all_elements_located((By.XPATH, "//tbody/tr"))
+            )
+        except TimeoutException:
+            print("Aucune ligne de document trouvée.")
+            return
 
-            # Déplacer le fichier renommé vers le répertoire de destination
-            shutil.move(new_file, os.path.join(destination_directory, new_file_name))
-            print(f"Le fichier renommé a été déplacé vers :"
-                  f"{os.path.join(destination_directory, new_file_name)}")
-        else:
-            print("Le fichier 'doc.pdf' n'a pas été trouvé.")
+        for ligne in lignes:
+            cellules = ligne.find_elements(By.TAG_NAME, "td")
+            if cellules:
+                cellules[7].click()
+                print("Clic sur le lien d'avis d'imposition.")
+                siret = f"{siren}{cellules[4].text.strip()}"
+                self.renommer_pdf_telecharge(code, nom, self.script_path, siret)
+                sleep(0.5)
+
+    def renommer_pdf_telecharge(self, code, nom_entreprise, dossier_telechargement, siret):
+        """
+        Renomme et déplace un fichier PDF téléchargé en ajoutant des informations pertinentes au
+        nom de fichier.
+
+        Args:
+            code (str): Code associé au fichier PDF.
+            nom_entreprise (str): Nom de l'entreprise.
+            dossier_telechargement (str): Répertoire où le fichier PDF est téléchargé.
+            siret (str): Numéro SIRET de l'entreprise.
+        """
+        # Création du nom du fichier avec l'année actuelle
+        annee = datetime.now().year
+        nouveau_nom = f"{code}_{nom_entreprise.replace(' ', '_')}_{
+            siret.replace(' ', '')}_CFE_{annee}.pdf"
+        chemin_source = os.path.join(dossier_telechargement, "Documents", "AvisCfe*.pdf")
+
+        # Recherche du fichier PDF dans le répertoire spécifié
+        fichiers = glob.glob(chemin_source)
+        if len(fichiers) == 0:
+            print("Fichier PDF correspondant introuvable.")
+            return
+
+        fichier_original = fichiers[0]
+        chemin_nouveau = os.path.join(dossier_telechargement, nouveau_nom)
+        dossier_destination = os.path.join(self.script_path, "Documents")
+
+        # Renommage et déplacement du fichier
+        os.rename(fichier_original, chemin_nouveau)
+        os.makedirs(dossier_destination, exist_ok=True)
+        shutil.move(chemin_nouveau, os.path.join(dossier_destination, nouveau_nom))
+        print(f"Le fichier renommé a été déplacé vers : {
+              os.path.join(dossier_destination, nouveau_nom)}")
 
     def close_windows(self):
         """
@@ -362,6 +300,36 @@ class Program:
             return
         self.driver.close()
         self.driver.switch_to.window(self.driver.window_handles[0])
+
+
+# Help in french
+def display_help():
+    """
+    Displays the help message for the script.
+
+    Parameters:
+    None
+
+    Returns:
+    None
+    """
+    print("\nUsage : python recup_cfe.py [acomptes|imposition] \n")
+    print("Ce script permet de récupérer les avis d'imposition de la CFE pour un ensemble de",
+          "SIREN donnés.")
+    print("Il prend en entrée un fichier nommé 'SIREN.TXT' contenant les SIREN,",
+          "noms d'entreprise, et codes.")
+    print("\nLe fichier 'SIREN.TXT' doit être au format suivant :")
+    print("    Siren;Nom;Code Dossier\n")
+    print("Le script prend également en entrée un fichier nommé 'identifiants.txt' contenant",
+          "les identifiants.")
+    print("Le fichier 'identifiants.txt' doit être au format suivant :")
+    print("    identifiant")
+    print("    mot_de_passe")
+    print("\nLe script doit être exécuté avec un argument 'acomptes' ou 'imposition' pour choisir",
+          "le search_type de document à récupérer.\n")
+    print("Exemple d'utilisation :")
+    print("    python recup_cfe.py acomptes")
+    print("    python recup_cfe.py imposition\n")
 
 
 def main():
@@ -379,22 +347,34 @@ def main():
     Returns:
     None
     """
-    print("Démarrage du script...")
-    logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
-    app = Program()
-    compteur = 1
+    if len(sys.argv) != 2 or sys.argv[1] not in ["acomptes", "imposition"] or \
+            sys.argv[1] in ["-h", "--help"]:
+        display_help()
+        return
 
-    # Pour chacun des SIREN
-    for data in app.data:
-        siren = data[0]
-        name = data[1]
-        code = data[2]
-        print(f"\nCompteur : {compteur} Code: {code} Name: {name} Siren: {siren}")
+    try:
+        print("Démarrage du script...")
+        logging.basicConfig(filename='log.txt', level=logging.INFO,
+                            format='%(asctime)s - %(message)s')
+        app = Program()
+        print("Initialisation terminée.")
+        compteur = 1
 
-        app.connect_to_website_with_credentials()
-        app.process_siren(siren, name, code)
-        app.close_windows()
-        compteur = compteur + 1
+        # Pour chacun des SIREN
+        for data in app.data:
+            siren = data[0]
+            name = data[1]
+            code = data[2]
+            print(f"\nCompteur: {compteur} Code: {code} Name: {name} Siren: {siren}")
+
+            app.connect_to_website_with_credentials()
+            app.process_siren(siren, name, code)
+            app.close_windows()
+            compteur = compteur + 1
+    except Exception as e:
+        # En cas d'erreur, affiche l'erreur et la log
+        print(f"Erreur : {e}")
+        logging.exception('Erreur : %s', e)
 
     print("Script terminé !")
 
