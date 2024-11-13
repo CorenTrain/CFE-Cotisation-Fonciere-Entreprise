@@ -50,75 +50,83 @@ class Program:
     """
 
     def __init__(self):
-        if sys.argv[1] == "acomptes":
-            self.acomptes = True
-        elif sys.argv[1] == "imposition":
-            self.acomptes = False
         self.script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
         self.url = "https://cfspro-idp.impots.gouv.fr/oauth2/authorize?[...]"
         self.file_path = os.path.join(self.script_path, "SIREN.TXT")
         self.credentials_file = os.path.join(self.script_path, "identifiants.txt")
-        self.donnees = self.read_data()
-        self.creds = self.read_creds()
+        self.donnees = self.lire_donnees()
+        self.creds = self.lire_identifiants()
         print(self.creds)
-        self.driver = self.initialize_driver()
+        self.driver = self.initialiser_driver()
 
     def __del__(self):
         self.driver.quit()
 
-    def initialize_driver(self):
+    def initialiser_driver(self):
         """
-        Initializes and returns a Selenium WebDriver object for Firefox with specific options.
+        Initialise et retourne un objet Selenium WebDriver pour Firefox avec des options
+        spécifiques.
 
-        Returns:
-            webdriver.Firefox: A WebDriver object for Firefox with the following options:
-                - Disable extensions
-                - Disable notifications
-                - Disable the sandbox
-                - Disable the dev-shm-usage
-                - Set the download folder to the current directory
-                - Hide the download manager when starting
-                - Set the download directory to the current directory
-                - Never ask to save files with the application/pdf MIME search_type
-                - Disable PDF.js
+        Retourne :
+            webdriver.Firefox: Un objet WebDriver pour Firefox avec les options suivantes :
+                - Désactiver les extensions
+                - Désactiver les notifications
+                - Désactiver le sandbox
+                - Désactiver le dev-shm-usage
+                - Définir le dossier de téléchargement sur le répertoire actuel
+                - Cacher le gestionnaire de téléchargement au démarrage
+                - Ne jamais demander de sauvegarder les fichiers avec le type MIME application/pdf
+                - Désactiver PDF.js
         """
-        current_directory = os.path.join(self.script_path, "Documents")
-        firefox_options = FirefoxOptions()
-        firefox_options.add_argument("--disable-extensions")
-        firefox_options.add_argument("--disable-notifications")
-        firefox_options.add_argument("--no-sandbox")
-        firefox_options.add_argument("--disable-dev-shm-usage")
-        firefox_options.set_preference("browser.download.folderList", 2)
-        firefox_options.set_preference("browser.download.manager.showWhenStarting", False)
-        firefox_options.set_preference("browser.download.dir", current_directory)
-        firefox_options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/pdf")
-        firefox_options.set_preference("pdfjs.disabled", True)
-        return webdriver.Firefox(options=firefox_options)
+        # Définir le répertoire de téléchargement dans le dossier "Documents"
+        dossier_actuel = os.path.join(self.script_path, "Documents")
 
-    def read_creds(self):
-        """
-        Reads the login credentials from the file and returns them as a list.
+        # Initialisation des options Firefox
+        options_firefox = FirefoxOptions()
+        options_firefox.add_argument("--disable-extensions")
+        options_firefox.add_argument("--disable-notifications")
+        options_firefox.add_argument("--no-sandbox")
+        options_firefox.add_argument("--disable-dev-shm-usage")
 
-        Returns:
-            list: A list containing the first two lines of the `credentials_file`, with leading
-            and trailing whitespace removed.
-        """
-        with open(self.credentials_file, "r", encoding="utf-8") as file:
-            return [line.strip() for line in islice(file, 2)]
+        # Préférences de téléchargement
+        options_firefox.set_preference("browser.download.folderList", 2)
+        options_firefox.set_preference("browser.download.manager.showWhenStarting", False)
+        options_firefox.set_preference("browser.download.dir", dossier_actuel)
+        options_firefox.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/pdf")
+        options_firefox.set_preference("pdfjs.disabled", True)
 
-    def read_data(self):
-        """
-        Reads data from a file and returns a list of tuples containing the SIREN, company name,
-        and dossier number.
+        # Retourner le driver Firefox configuré
+        return webdriver.Firefox(options=options_firefox)
 
-        Returns:
-            list: A list of tuples, where each tuple contains the SIREN (a string), company name
-            (a string), and dossier number (a string).
+    def lire_identifiants(self):
         """
-        with open(self.file_path, "r", encoding="utf-8") as file:
-            next(file)
-            return [tuple(line.strip().split(";", 3)[:3])
-                    for line in file if len(line.strip().split(";", 3)) == 3]
+        Lit les identifiants depuis le fichier et les retourne sous forme de liste.
+
+        Retourne :
+            list: Une liste contenant les deux premières lignes du fichier `identifiants_file`,
+            avec les espaces blancs en début et fin de ligne supprimés.
+        """
+        with open(self.credentials_file, "r", encoding="utf-8") as fichier:
+            # Utilisation de islice pour limiter à 2 lignes.
+            return [ligne.strip() for ligne in islice(fichier, 2)]
+
+    def lire_donnees(self):
+        """
+        Lit les données depuis un fichier et retourne une liste de tuples contenant le SIREN,
+        le nom de l'entreprise et le numéro de dossier.
+
+        Retourne :
+            list: Une liste de tuples, chaque tuple contenant le SIREN (str),
+            le nom de l'entreprise (str) et le numéro de dossier (str).
+        """
+        with open(self.file_path, "r", encoding="utf-8") as fichier:
+            # Ignorer la première ligne (en-tête)
+            next(fichier)
+            # Utilisation d'une liste en compréhension pour extraire les données
+            return [
+                tuple(ligne.strip().split(";", 3)[:3])
+                for ligne in fichier if len(ligne.strip().split(";", 3)) == 3
+            ]
 
     def connexion_site(self):
         """
@@ -166,58 +174,61 @@ class Program:
 
     def ouvrir_avis_cfe(self, siren):
         """
-        Opens the Avis CFE page and enters the SIREN number to access the CFE information.
+        Ouvre la page des Avis CFE et entre le numéro SIREN pour accéder aux informations CFE.
 
         Args:
-            siren (str): The SIREN number to access the CFE information.
+            siren (str): Le numéro SIREN pour accéder aux informations CFE.
 
         Returns:
-            bool: True if the CFE information is successfully accessed, False otherwise.
+            bool: True si l'accès aux informations CFE est réussi, False sinon.
         """
+        # Essayer d'accéder à la page d'accueil
         try:
             self.driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
         except TimeoutException:
             print("Timeout lors de l'accès à la page d'accueil.")
             return self.ouvrir_avis_cfe(siren)
 
-        WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
-            (By.XPATH, "//a[contains(text(), 'Avis CFE')]"))).click()
+        # Attendre et cliquer sur "Avis CFE"
+        WebDriverWait(self.driver, 5).until(
+            EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Avis CFE')]"))
+        ).click()
 
+        # Entrer le SIREN
         for i, digit in enumerate(siren):
             self.driver.find_element(By.ID, f"siren{i}").send_keys(digit)
 
-        # Clic sur le bouton consulter
+        # Cliquer sur le bouton consulter
         self.driver.find_element(By.NAME, "button.submitValider").click()
 
-        window_handles = self.driver.window_handles
-
-        if len(window_handles) < 2:
+        # Vérifier si une nouvelle fenêtre s'ouvre
+        if len(self.driver.window_handles) < 2:
             print("SIREN non accessible.")
             logging.info('SIREN - %s - INACCESSIBLE', siren)
             return False
-        self.driver.switch_to.window(window_handles[-1])
 
-        # Tente de cliquer sur Accès aux avis de CFE et s'il ne fonctionne pas, passe au SIREN
-        # suivant
+        # Passer à la fenêtre qui s'est ouverte
+        self.driver.switch_to.window(self.driver.window_handles[-1])
+
+        # Vérifier la présence de la page d'accueil
         try:
-            WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
-                (By.XPATH, "//*[contains(text(), 'Accueil du compte fiscal des professionnels')]")))
+            WebDriverWait(self.driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//*[contains(text(), 'Accueil du compte fiscal des professionnels')]")
+                )
+            )
         except TimeoutException:
             return self.ouvrir_avis_cfe(siren)
 
+        # Essayer de cliquer sur le bouton pour accéder aux avis de CFE
         try:
-            # Sur la page https://cfspro.impots.gouv.fr/adelie2mapi/xhtml/accueil/accueil.xhtml
-            # clique à droite sur accès aux avis de CFE
-            WebDriverWait(self.driver, 0.5).until(EC.presence_of_element_located(
-                (By.XPATH, "//a[@class='custom_bouton_cfe']"))).click()
+            WebDriverWait(self.driver, 0.5).until(
+                EC.presence_of_element_located((By.XPATH, "//a[@class='custom_bouton_cfe']"))
+            ).click()
         except TimeoutException:
-            print(
-                "Pas de CFE, passage au SIREN suivant.",
-                "(Pas de bouton CFE (//a[@class='custom_bouton_cfe']))"
-            )
+            print("Pas de CFE, passage au SIREN suivant.")
             logging.info('PAS DE CFE - SIREN - %s', siren)
             return False
-
         return True
 
     def traiter_lien_avis_imposition(self, code, nom, siren):
