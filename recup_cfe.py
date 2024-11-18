@@ -309,7 +309,7 @@ def afficher_aide():
     """
 
     aide_message = """
-        Usage : python recup_cfe.py [acomptes|imposition]
+        Usage : python recup_cfe.py
 
         Ce script récupère les avis d'imposition de la CFE pour un ensemble de SIREN fournis.
 
@@ -321,11 +321,7 @@ def afficher_aide():
             identifiant
             mot_de_passe
 
-        Argument :
-        - 'acomptes' ou 'imposition' : spécifie le type de document à récupérer.
-
         Exemples d'utilisation :
-            python recup_cfe.py acomptes
             python recup_cfe.py imposition
     """
     print(aide_message)
@@ -340,11 +336,6 @@ def main():
     """
 
     # Validation des arguments
-    argument = sys.argv[1] if len(sys.argv) == 2 else None
-    if argument not in ["acomptes", "imposition"] and argument not in ["-h", "--help"]:
-        afficher_aide()
-        return
-
     try:
         # Initialisation du logging et démarrage de l'application
         print("Démarrage du script...")
