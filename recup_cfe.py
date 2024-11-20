@@ -4,16 +4,20 @@ import logging
 import os
 import shutil
 import sys
+import tkinter
 from datetime import datetime
 from itertools import islice
 from time import sleep
+from tkinter import messagebox
 
 from selenium import webdriver
-from selenium.common.exceptions import (TimeoutException)
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
+LIEN_IMPOTS = "https://cfspro.impots.gouv.fr/mire/accueil.do"
 
 
 class Program:
@@ -51,7 +55,6 @@ class Program:
 
     def __init__(self):
         self.script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-        self.url = "https://cfspro-idp.impots.gouv.fr/oauth2/authorize?[...]"
         self.file_path = os.path.join(self.script_path, "SIREN.TXT")
         self.credentials_file = os.path.join(self.script_path, "identifiants.txt")
         self.donnees = self.lire_donnees()
@@ -128,6 +131,25 @@ class Program:
                 for ligne in fichier if len(ligne.strip().split(";", 3)) == 3
             ]
 
+    def afficher_warning(self):
+        """
+        Affiche une boîte de dialogue Warning toujours au premier plan avec une icône personnalisée dans la barre des tâches.
+        """
+        # Créer une fenêtre temporaire
+        root = tkinter.Tk()
+        root.title("Attention")  # Titre de la fenêtre
+        root.iconbitmap(".\\Ressources\\Icone_acces.ico")
+        root.geometry("2x2")  # Fenêtre minuscule invisible
+        root.deiconify()  # Rendre visible dans la barre des tâches
+        root.attributes("-topmost", True)  # Toujours au premier plan
+
+        # Afficher la boîte de dialogue
+        messagebox.showwarning(
+            "Attention", "Saisissez le captcha et cliquez sur le bouton de connexion.\n", parent=root)
+
+        # Détruire la fenêtre après fermeture de la boîte de dialogue
+        root.destroy()
+
     def connexion_site(self):
         """
         Connects to the website using the provided credentials.
@@ -143,21 +165,30 @@ class Program:
             self (Program): The Program instance.
         """
         print("Ouverture de la page...")
-        self.driver.get(self.url)
-
-        # Vérification si déjà connecté
-        try:
-            WebDriverWait(self.driver, 0.5).until(
-                EC.presence_of_element_located((By.ID, "identifiant_après_connexion")))
-            print("Déjà connecté.")
-            return
-        except TimeoutException:
-            print("Pas encore connecté. Procédure de connexion en cours.")
+        self.driver.get(LIEN_IMPOTS)
 
         # Connexion
         self.driver.find_element(By.ID, "ident").send_keys(self.creds[0])
         self.driver.find_element(By.NAME, "password").send_keys(self.creds[1])
-        self.driver.find_element(By.XPATH, "//button[contains(text(), 'Connexion')]").click()
+        # self.driver.find_element(By.XPATH, "//button[contains(text(), 'Connexion')]").click()
+
+        # Désactiver les événements clavier temporairement
+        self.driver.execute_script("""
+            document.body.addEventListener('keydown', function(event) {
+                event.stopPropagation();
+            }, true);
+        """)
+
+        # Afficher la warning box
+        self.afficher_warning()
+
+        # Attendre que l'URL change
+        try:
+            WebDriverWait(self.driver, 120).until(EC.url_to_be(LIEN_IMPOTS))
+        except TimeoutException:
+            print("Timeout lors de la connexion. ")
+            logging.error("Timeout lors de la connexion.")
+            self.connexion_site()
 
     def traiter_siren(self, siren, nom_entreprise, code_dossier):
         """
@@ -169,10 +200,12 @@ class Program:
             nom_entreprise (str): Nom de l'entreprise.
             code_dossier (str): Code de dossier associé.
         """
-        if self.ouvrir_avis_cfe(siren):
+        # Je tente d'accéder à la page des avis CFE
+        # Si elle est présente et contient des avis, je passe à l'étape du téléchargement
+        if self.acceder_avis_cfe_du_siren(siren):
             self.traiter_lien_avis_imposition(code_dossier, nom_entreprise, siren)
 
-    def ouvrir_avis_cfe(self, siren):
+    def acceder_avis_cfe_du_siren(self, siren):
         """
         Ouvre la page des Avis CFE et entre le numéro SIREN pour accéder aux informations CFE.
 
@@ -182,17 +215,16 @@ class Program:
         Returns:
             bool: True si l'accès aux informations CFE est réussi, False sinon.
         """
-        # Essayer d'accéder à la page d'accueil
+        # Clique pour accéder à la page de saisie de SIREN
         try:
-            self.driver.get("https://cfspro.impots.gouv.fr/mire/accueil.do")
+            WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(
+                (By.XPATH, "//a[normalize-space()='Avis CFE']"))).click()
         except TimeoutException:
-            print("Timeout lors de l'accès à la page d'accueil.")
-            return self.ouvrir_avis_cfe(siren)
+            return self.acceder_avis_cfe_du_siren(siren)
 
-        # Attendre et cliquer sur "Avis CFE"
-        WebDriverWait(self.driver, 5).until(
-            EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Avis CFE')]"))
-        ).click()
+        # S'assure que les champs sont vides
+        for i in range(9):
+            self.driver.find_element(By.ID, f"siren{i}").clear()
 
         # Entrer le SIREN
         for i, digit in enumerate(siren):
@@ -204,27 +236,23 @@ class Program:
         # Vérifier si une nouvelle fenêtre s'ouvre
         if len(self.driver.window_handles) < 2:
             print("SIREN non accessible.")
-            logging.info('SIREN - %s - INACCESSIBLE', siren)
+            logging.error('SIREN - %s - INACCESSIBLE', siren)
             return False
 
         # Passer à la fenêtre qui s'est ouverte
         self.driver.switch_to.window(self.driver.window_handles[-1])
 
-        # Vérifier la présence de la page d'accueil
+        # Vérifier la présence de la page d'accueil, sinon réessayer
         try:
-            WebDriverWait(self.driver, 5).until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//*[contains(text(), 'Accueil du compte fiscal des professionnels')]")
-                )
-            )
+            WebDriverWait(self.driver, 5).until(EC.presence_of_element_located(
+                (By.XPATH, "//*[contains(text(), 'Accueil du compte fiscal des professionnels')]")))
         except TimeoutException:
-            return self.ouvrir_avis_cfe(siren)
+            return self.acceder_avis_cfe_du_siren(siren)
 
         # Essayer de cliquer sur le bouton pour accéder aux avis de CFE
         try:
-            WebDriverWait(self.driver, 0.5).until(
-                EC.presence_of_element_located((By.XPATH, "//a[@class='custom_bouton_cfe']"))
-            ).click()
+            WebDriverWait(self.driver, 0.5).until(EC.presence_of_element_located(
+                (By.XPATH, "//a[@class='custom_bouton_cfe']"))).click()
         except TimeoutException:
             print("Pas de CFE, passage au SIREN suivant.")
             logging.info('PAS DE CFE - SIREN - %s', siren)
@@ -240,16 +268,17 @@ class Program:
             nom (str): Nom de l'entreprise.
             siren (str): Numéro SIREN de l'entreprise.
         """
-        print("Arrivée sur la page des avis d'imposition.")
+        logging.info("Arrivée sur la page des avis d'imposition.")
 
+        # Obtention des lignes de document, s'il y en a, sinon retour
         try:
             lignes = WebDriverWait(self.driver, 3).until(
-                EC.presence_of_all_elements_located((By.XPATH, "//tbody/tr"))
-            )
+                EC.presence_of_all_elements_located((By.XPATH, "//tbody/tr")))
         except TimeoutException:
             print("Aucune ligne de document trouvée.")
             return
 
+        # Clique sur le lien d'avis d'imposition pour chaque ligne et les renomme
         for ligne in lignes:
             cellules = ligne.find_elements(By.TAG_NAME, "td")
             if cellules:
@@ -302,6 +331,13 @@ class Program:
             self.driver.close()
             self.driver.switch_to.window(self.driver.window_handles[0])
 
+    def retour_accueil(self):
+        """
+        Retourne à la page d'accueil du site.
+        """
+        self.driver.get(LIEN_IMPOTS)
+        WebDriverWait(self.driver, 10).until(EC.url_to_be(LIEN_IMPOTS))
+
 
 def afficher_aide():
     """
@@ -339,18 +375,26 @@ def main():
     try:
         # Initialisation du logging et démarrage de l'application
         print("Démarrage du script...")
-        logging.basicConfig(filename='log.txt', level=logging.INFO,
-                            format='%(asctime)s - %(message)s')
+        logging.basicConfig(filename='log_infos.txt', level=logging.INFO,
+                            format='%(asctime)s - %(message)s', encoding='utf-8')
+        logging.basicConfig(filename='log_erreurs.txt', level=logging.ERROR,
+                            format='%(asctime)s - %(message)s', encoding='utf-8')
 
         app = Program()
         print("Initialisation terminée.")
+        logging.info("Initialisation terminée.")
+
+        # Connexion au site avant de traiter les SIREN car la connexion est une action unique
+        app.connexion_site()
 
         # Traitement de chaque SIREN
         for compteur, (siren, nom, code) in enumerate(app.donnees, start=1):
             print(f"\nCompteur: {compteur} | Code: {code} | Nom: {nom} | SIREN: {siren}")
-            app.connexion_site()
+            logging.info("\nCompteur: %s | Code: %s | Nom: %s | SIREN: %s",
+                         compteur, code, nom, siren)
             app.traiter_siren(siren, nom, code)
             app.fermer_fenetres()
+            app.retour_accueil()
 
     except Exception as e:
         print(f"Erreur : {e}")
