@@ -4,14 +4,16 @@ import logging
 import os
 import shutil
 import sys
+import threading
 import tkinter
 from datetime import datetime
 from itertools import islice
 from time import sleep
 from tkinter import messagebox
 
+from cfe_tkinter import WindowApp
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
@@ -55,17 +57,20 @@ class Program:
 
     def __init__(self):
         self.script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-        self.file_path = os.path.join(self.script_path, "SIREN.TXT")
         self.credentials_file = os.path.join(self.script_path, "identifiants.txt")
-        self.donnees = self.lire_donnees()
-        self.creds = self.lire_identifiants()
-        print(self.creds)
-        self.driver = self.initialiser_driver()
+        self.donnees: dict = {}
+        self.driver = None
+        self.avancee: dict = {"dossiers_total": len(self.donnees), "dossiers_traites": 0,
+                              "dossiers_succes": 0, "dossiers_echec": 0,
+                              "dossiers_restants": len(self.donnees)}
+        print("Initialisation terminée.")
+        logging.info("Initialisation terminée.")
 
     def __del__(self):
-        self.driver.quit()
+        if self.driver:
+            self.driver.quit()
 
-    def initialiser_driver(self):
+    def initialiser_driver(self, chemin_dossier: str):
         """
         Initialise et retourne un objet Selenium WebDriver pour Firefox avec des options
         spécifiques.
@@ -82,7 +87,7 @@ class Program:
                 - Désactiver PDF.js
         """
         # Définir le répertoire de téléchargement dans le dossier "Documents"
-        dossier_actuel = os.path.join(self.script_path, "Documents")
+        dossier_actuel = chemin_dossier
 
         # Initialisation des options Firefox
         options_firefox = FirefoxOptions()
@@ -99,7 +104,7 @@ class Program:
         options_firefox.set_preference("pdfjs.disabled", True)
 
         # Retourner le driver Firefox configuré
-        return webdriver.Firefox(options=options_firefox)
+        self.driver = webdriver.Firefox(options=options_firefox)
 
     def lire_identifiants(self):
         """
@@ -113,7 +118,7 @@ class Program:
             # Utilisation de islice pour limiter à 2 lignes.
             return [ligne.strip() for ligne in islice(fichier, 2)]
 
-    def lire_donnees(self):
+    def lire_donnees(self, chemin: str) -> list:
         """
         Lit les données depuis un fichier et retourne une liste de tuples contenant le SIREN,
         le nom de l'entreprise et le numéro de dossier.
@@ -122,9 +127,9 @@ class Program:
             list: Une liste de tuples, chaque tuple contenant le SIREN (str),
             le nom de l'entreprise (str) et le numéro de dossier (str).
         """
-        with open(self.file_path, "r", encoding="utf-8") as fichier:
+        with open(chemin, "r", encoding="utf-8") as fichier:
             # Ignorer la première ligne (en-tête)
-            next(fichier)
+            # next(fichier)
             # Utilisation d'une liste en compréhension pour extraire les données
             return [
                 tuple(ligne.strip().split(";", 3)[:3])
@@ -150,7 +155,7 @@ class Program:
         # Détruire la fenêtre après fermeture de la boîte de dialogue
         root.destroy()
 
-    def connexion_site(self):
+    def connexion_site(self, identifiant: str, mot_de_passe: str):
         """
         Connects to the website using the provided credentials.
 
@@ -168,9 +173,8 @@ class Program:
         self.driver.get(LIEN_IMPOTS)
 
         # Connexion
-        self.driver.find_element(By.ID, "ident").send_keys(self.creds[0])
-        self.driver.find_element(By.NAME, "password").send_keys(self.creds[1])
-        # self.driver.find_element(By.XPATH, "//button[contains(text(), 'Connexion')]").click()
+        self.driver.find_element(By.ID, "ident").send_keys(identifiant)
+        self.driver.find_element(By.NAME, "password").send_keys(mot_de_passe)
 
         # Désactiver les événements clavier temporairement
         self.driver.execute_script("""
@@ -182,13 +186,16 @@ class Program:
         # Afficher la warning box
         self.afficher_warning()
 
+        self.driver.switch_to.window(self.driver.current_window_handle)
+        self.driver.find_element(By.ID, "inputcaptcha").click()
+
         # Attendre que l'URL change
         try:
             WebDriverWait(self.driver, 120).until(EC.url_to_be(LIEN_IMPOTS))
         except TimeoutException:
             print("Timeout lors de la connexion. ")
             logging.error("Timeout lors de la connexion.")
-            self.connexion_site()
+            self.connexion_site(identifiant, mot_de_passe)
 
     def traiter_siren(self, siren, nom_entreprise, code_dossier):
         """
@@ -204,6 +211,12 @@ class Program:
         # Si elle est présente et contient des avis, je passe à l'étape du téléchargement
         if self.acceder_avis_cfe_du_siren(siren):
             self.traiter_lien_avis_imposition(code_dossier, nom_entreprise, siren)
+            self.avancee["dossiers_succes"] += 1
+        else:
+            self.avancee["dossiers_echec"] += 1
+            print("Aucun avis d'imposition trouvé.")
+        self.avancee["dossiers_traites"] += 1
+        self.avancee["dossiers_restants"] -= 1
 
     def acceder_avis_cfe_du_siren(self, siren):
         """
@@ -219,7 +232,7 @@ class Program:
         try:
             WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(
                 (By.XPATH, "//a[normalize-space()='Avis CFE']"))).click()
-        except TimeoutException:
+        except (TimeoutException, WebDriverException):
             return self.acceder_avis_cfe_du_siren(siren)
 
         # S'assure que les champs sont vides
@@ -363,42 +376,73 @@ def afficher_aide():
     print(aide_message)
 
 
-def main():
-    """
-    Fonction principale qui initialise le journal de logs, crée une instance de la classe Program,
-    et traite chaque SIREN, nom, et code. Pour chaque entrée, elle affiche le compteur et les
-    détails. Elle connecte ensuite l'application au site web avec les identifiants et lance
-    le traitement des données.
-    """
-
-    # Validation des arguments
+def traitement(app: Program, window_app: WindowApp):
     try:
-        # Initialisation du logging et démarrage de l'application
-        print("Démarrage du script...")
-        logging.basicConfig(filename='log_infos.txt', level=logging.INFO,
-                            format='%(asctime)s - %(message)s', encoding='utf-8')
-        logging.basicConfig(filename='log_erreurs.txt', level=logging.ERROR,
-                            format='%(asctime)s - %(message)s', encoding='utf-8')
+        # Attente du clic sur le bouton ou fermeture de la fenêtre
+        window_app.wait_variable(window_app.var_activite)
 
-        app = Program()
-        print("Initialisation terminée.")
-        logging.info("Initialisation terminée.")
+        if window_app.stopped:
+            return
 
-        # Connexion au site avant de traiter les SIREN car la connexion est une action unique
-        app.connexion_site()
+        print("Démarrage du traitement des dossiers...")
+        window_app.etat_app = "En cours de traitement..."
+        app.donnees = app.lire_donnees(window_app.web_data["fichier"])
+        app.avancee["dossiers_total"] = len(app.donnees)
+        app.avancee["dossiers_restants"] = len(app.donnees)
+        window_app.update_progression(app.avancee, initialisation=True)
 
-        # Traitement de chaque SIREN
+        app.initialiser_driver(window_app.web_data["destination"])
+
+        app.connexion_site(window_app.web_data["identifiant"], window_app.web_data["mot_de_passe"])
+
         for compteur, (siren, nom, code) in enumerate(app.donnees, start=1):
-            print(f"\nCompteur: {compteur} | Code: {code} | Nom: {nom} | SIREN: {siren}")
-            logging.info("\nCompteur: %s | Code: %s | Nom: %s | SIREN: %s",
-                         compteur, code, nom, siren)
-            app.traiter_siren(siren, nom, code)
-            app.fermer_fenetres()
-            app.retour_accueil()
+            # Vérifier si la fenêtre a été fermée pendant le traitement
+            # pour savoir s'il faut arrêter
+            if window_app:
+                print(f"Fenêtre fermée pendant le traitement. {compteur} dossiers traités.")
+                print(f"Compteur: {compteur} | SIREN: {siren}")
+                app.traiter_siren(siren, nom, code)
+                app.fermer_fenetres()
+                app.retour_accueil()
+                window_app.update_progression(app.avancee)
+            else:
+                return
+        window_app.etat_app = "Programme terminé !"
 
     except Exception as e:
         print(f"Erreur : {e}")
         logging.exception("Erreur lors de l'exécution : %s", e)
+
+
+def main():
+    """
+    Fonction principale qui initialise le journal de logs, crée une instance de la classe Program,
+    et traite chaque SIREN, nom, et code.
+    """
+
+    print("Démarrage du script...")
+    logging.basicConfig(filename='log_infos.txt', level=logging.INFO,
+                        format='%(asctime)s - %(message)s', encoding='utf-8')
+    logging.basicConfig(filename='log_erreurs.txt', level=logging.ERROR,
+                        format='%(asctime)s - %(message)s', encoding='utf-8')
+
+    # Initialisation des classes de l'application
+    app = Program()
+    window_app = WindowApp()
+
+    # Lancement du traitement dans un thread
+    thread = threading.Thread(target=traitement, args=(app, window_app), daemon=True)
+    thread.start()
+
+    # Gestion de l'interface
+    try:
+        window_app.mainloop()
+    except Exception as e:
+        print(f"Erreur tkinter : {e}")
+
+    if window_app.stopped:
+        print("La fenêtre a été fermée. Arrêt du script.")
+        return
 
     print("Script terminé !")
 
