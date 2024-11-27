@@ -1,6 +1,5 @@
 identifiants.txt
 SIREN.txt
 /build
-/Documents
-log.txt
-ERROR.txt
+/*/
+*.txt
