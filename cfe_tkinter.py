@@ -1,6 +1,7 @@
 """Module pour l'interface graphique de l'application de téléchargement des CFE."""
 from tkinter import filedialog
 
+import ctypes
 import customtkinter as ctk
 
 
@@ -9,10 +10,12 @@ class WindowApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
+        self.user32 = ctypes.windll.user32
         self.web_data: dict = {}
         self.objects: dict = {}
         self.eta = "En attente de lancement"
         self.var_activite = ctk.BooleanVar(value=False)
+        self.work_area = self._get_work_area()
 
         # Initialisation de l'interface
         self.init_ui()
@@ -20,8 +23,20 @@ class WindowApp(ctk.CTk):
         self.dossiers_total = 0
         self.title("Application de Téléchargement des CFE")
         self.stopped = False
-        self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
         self.protocol("WM_DELETE_WINDOW", self.quitter)
+        usable_width, usable_height = self.get_usable_dimensions()
+        print(usable_width, usable_height)
+
+        self.geometry(f"{usable_width}x{usable_height}")
+
+    def _get_work_area(self):
+        rect = ctypes.wintypes.RECT()
+        ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
+        return rect
+
+    def get_usable_dimensions(self):
+        return (self.work_area.right - self.work_area.left,
+                self.work_area.bottom - self.work_area.top - 20)
 
     @property
     def etat_app(self):
@@ -47,7 +62,18 @@ class WindowApp(ctk.CTk):
 
     def init_ui(self):
         """Initialise l'interface graphique avec une structure claire et modulaire."""
+        # Créer le frame principal avec scrolling
+        usable_width, usable_height = self.get_usable_dimensions()
+
+        self.scrollable_frame = ctk.CTkScrollableFrame(
+            self, width=usable_width, height=usable_height, corner_radius=0
+        )
+        self.scrollable_frame.grid(row=0, column=0, sticky="nsew")
+
+        # Configurer la grille principale
         self._configure_main_grid()
+
+        # Ajouter les différentes sections à l'intérieur du scrollable_frame
         self._create_title_section()
         self._create_guide_section()
         self._create_config_section()
@@ -56,13 +82,13 @@ class WindowApp(ctk.CTk):
 
     def _configure_main_grid(self):
         """Configure la grille principale pour une mise en page dynamique."""
-        self.grid_columnconfigure(0, weight=1)
+        self.scrollable_frame.grid_columnconfigure(0, weight=1)
         for i in range(5):  # Pour chaque ligne nécessaire
-            self.grid_rowconfigure(i, weight=0)
+            self.scrollable_frame.grid_rowconfigure(i, weight=0)
 
     def _create_title_section(self):
         """Crée la section du titre."""
-        frame_titre = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        frame_titre = ctk.CTkFrame(self.scrollable_frame, fg_color="transparent", corner_radius=0)
         frame_titre.grid(row=0, column=0, padx=10, pady=20, sticky="ew")
         ctk.CTkLabel(
             frame_titre,
@@ -83,7 +109,7 @@ class WindowApp(ctk.CTk):
             "6. Remplissez le CAPTCHA (Code de sécurité sur la page d'accueil impots.gouv).\n\n"
             "7. C'est parti ! Le script télécharge tous vos fichiers CFE !"
         )
-        frame_guide = ctk.CTkFrame(self, corner_radius=10, border_width=2)
+        frame_guide = ctk.CTkFrame(self.scrollable_frame, corner_radius=10, border_width=2)
         frame_guide.grid(row=1, column=0, padx=20, sticky="ew")
         frame_guide.bind("<Configure>", self.update_wraplength)
         self.objects["frame_guide"] = frame_guide
@@ -103,12 +129,12 @@ class WindowApp(ctk.CTk):
             anchor="w",
             justify="left"
         )
-        label_guide.pack(padx=(40, 20), pady=(0, 20), fill="x")
+        label_guide.pack(padx=(40, 20), pady=(0, 20), fill="both", expand=True)
         self.objects["label_guide"] = label_guide
 
     def _create_config_section(self):
         """Crée la section des champs de configuration."""
-        frame_champs = ctk.CTkFrame(self, corner_radius=10, border_width=2)
+        frame_champs = ctk.CTkFrame(self.scrollable_frame, corner_radius=10, border_width=2)
         frame_champs.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
         frame_champs.grid_columnconfigure(1, weight=0)
 
@@ -176,7 +202,7 @@ class WindowApp(ctk.CTk):
 
     def _create_progress_bar_section(self):
         """Crée la section de la barre de progression."""
-        frame_progression = ctk.CTkFrame(self, corner_radius=10, border_width=2)
+        frame_progression = ctk.CTkFrame(self.scrollable_frame, corner_radius=10, border_width=2)
         frame_progression.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="nsew")
         frame_progression.grid_columnconfigure(0, weight=1)
 
@@ -197,7 +223,8 @@ class WindowApp(ctk.CTk):
 
     def _create_buttons_section(self):
         """Crée la section des boutons."""
-        frame_boutons = ctk.CTkFrame(self, corner_radius=10, fg_color="transparent")
+        frame_boutons = ctk.CTkFrame(
+            self.scrollable_frame, corner_radius=10, fg_color="transparent")
         frame_boutons.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
         frame_boutons.grid_columnconfigure((0, 1), weight=1)
 
@@ -276,3 +303,8 @@ class WindowApp(ctk.CTk):
         self.var_activite.set(True)
         self.quit()
         self.destroy()
+
+
+if __name__ == "__main__":
+    app = WindowApp()
+    app.mainloop()
