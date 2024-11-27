@@ -14,22 +14,19 @@ Ce script Python utilise Selenium pour automatiser la récupération des avis de
 
 ## Prérequis
 
-- Python 3.8 ou supérieur.
-- Selenium WebDriver.
-- Mozila Firefox installé.
+- Aucun
 
 ## Installation
 
-1. Clonez ce dépôt GitHub sur votre machine locale.
+Téléchargez la dernière version du script située dans la section Release à droite.
 
 ## Configuration
 
-1. Modifiez le fichier `identifiants.txt` pour inclure vos identifiants de connexion au site des impôts.
-2. Assurez-vous que votre fichier de SIREN contient la liste numéros SIREN, des noms d'entreprises, des codes dossiers à traiter pour lesquels le cabinet a un accès délégué, chaque ligne doit être au format suivant : `CODE DOSSIER;NOM;NUM DOSSIER`.
+1. Créez et assurez-vous que votre fichier de SIREN contient la liste comprenant numéros SIREN, noms d'entreprises et codes dossiers à traiter pour lesquels le cabinet a un accès délégué, chaque ligne doit être au format suivant : `SIREN;NOM;NUM DOSSIER`.
 
 ## Utilisation
 
-Lancez le script en exécutant :
-
-```shell
-python nom_du_script.py
+1. Lancez le script en exécutant le fichier téléchargé.
+2. Saisissez vos identifiants impots professionnels (Aucun identifiant n'est stocké pendant le processus, ils ne sont utilisés que pour vous connecter et sont supprimés).
+3. Renseignez le fichier contenant vos SIREN.
+4. Choisissez l'emplacement où vous voulez que vos fichiers soient téléchargés. 
