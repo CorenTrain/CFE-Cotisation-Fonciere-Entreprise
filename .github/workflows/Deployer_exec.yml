@@ -10,7 +10,7 @@ on:
         type: string
   push:  # Déclenchement sur push d'un tag
     tags:
-      - 'v*.*.*'  # Tags correspondant au format vX.Y.Z
+      - '*.*.*'  # Tags correspondant au format vX.Y.Z
 
 jobs:
   pyinstaller-build:
