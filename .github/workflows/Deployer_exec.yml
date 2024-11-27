@@ -2,13 +2,15 @@ name: Build and Release Executable
 
 # Déclenchement du workflow
 on:
-  workflow_dispatch:  # Lancement manuel
-  pull_request:       # Déclenchement au merge d'une PR sur `main`
-    branches:
-      - main
-  push:
+  workflow_dispatch:  # Lancement manuel avec entrée
+    inputs:
+      tag_name:
+        description: "Tag à utiliser (si défini manuellement)"
+        required: false
+        type: string
+  push:  # Déclenchement sur push d'un tag
     tags:
-      - 'v*.*.*'  # Déclenchement lors de la poussée de tags correspondant au format vX.Y.Z
+      - 'v*.*.*'  # Tags correspondant au format vX.Y.Z
 
 jobs:
   pyinstaller-build:
@@ -29,12 +31,16 @@ jobs:
           upload_exe_with_name: 'Telechargement_CFE.exe'
           options: --onefile, --name "Telechargement_CFE", --windowed
 
-      # Étape 3 : Extraire la version du tag (uniquement pour les push sur les tags)
-      - name: Extract tag version
-        if: startsWith(github.ref, 'refs/tags/')  # Se déclenche uniquement si c'est un push sur un tag
+      # Étape 3 : Déterminer le tag
+      - name: Determine tag
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"  # Extraction du tag
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV  # Sauvegarde la version dans une variable d'environnement
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.tag_name }}" != "" ]]; then
+            TAG_NAME="${{ inputs.tag_name }}"
+          else
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV  # Sauvegarde dans une variable d'environnement
+        shell: bash
 
       # Étape 4 : Créer ou mettre à jour une Release GitHub
       - name: Create or Update Release
@@ -43,7 +49,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.TAG_NAME }}  # Utilisation du tag extrait
+          tag_name: ${{ env.TAG_NAME }}  # Utilisation du tag déterminé
           release_name: "Téléchargement CFE - Release"
           body: |
             Voici la dernière version de l'exécutable `Téléchargement CFE` (version ${{ env.TAG_NAME }}).
