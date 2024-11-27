@@ -21,7 +21,7 @@ jobs:
         with:
           python_ver: '3.8'  # Version de Python à utiliser
           pyinstaller_ver: '==5.13.2'
-          spec: './recup_cfe.spec'
+          spec: './recup_cfe.py'
           requirements: './requirements.txt'  # Fichier des dépendances à installer
-          upload_exe_with_name: 'Téléchargement_CFE.exe'  # Nom de l'exécutable à téléverser
-          options: --onefile, --name "Téléchargement_CFE", --windowed
+          upload_exe_with_name: 'Telechargement_CFE.exe'  # Nom de l'exécutable à téléverser
+          options: --onefile, --name "Telechargement_CFE", --windowed
