@@ -2,6 +2,10 @@ name: Build and Release Executable
 
 # Déclenchement du workflow
 on:
+  workflow_dispatch:  # Lancement manuel
+  pull_request:       # Déclenchement au merge d'une PR sur `main`
+    branches:
+      - main
   push:
     tags:
       - 'v*.*.*'  # Déclenchement lors de la poussée de tags correspondant au format vX.Y.Z
@@ -25,8 +29,9 @@ jobs:
           upload_exe_with_name: 'Telechargement_CFE.exe'
           options: --onefile, --name "Telechargement_CFE", --windowed
 
-      # Étape 3 : Extraire la version du tag
+      # Étape 3 : Extraire la version du tag (uniquement pour les push sur les tags)
       - name: Extract tag version
+        if: startsWith(github.ref, 'refs/tags/')  # Se déclenche uniquement si c'est un push sur un tag
         run: |
           TAG_NAME="${GITHUB_REF#refs/tags/}"  # Extraction du tag
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV  # Sauvegarde la version dans une variable d'environnement
