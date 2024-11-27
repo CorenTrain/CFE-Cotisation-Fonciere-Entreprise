@@ -1,9 +1,9 @@
 # Automatisation de la récupération des avis de CFE
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
-![Selenium](https://img.shields.io/badge/selenium-3.141.0-green.svg)
+![Python Version](https://img.shields.io/badge/python-3%2B-blue.svg)
+![Selenium](https://img.shields.io/badge/selenium-4.21.0-green.svg)
 
-Ce script Python utilise Selenium pour automatiser la récupération des avis de Contribution Foncière des Entreprises (CFE) sur le site des impôts français. Il télécharge automatiquement les documents en format PDF et les renomme en utilisant le numéro SIREN et le nom de l'entreprise, facilitant ainsi la gestion documentaire pour les professionnels et le classement dans la GED (Gestion Electronique des Données) du cabinet.
+Ce script Python utilise Selenium pour automatiser la récupération des avis de Contribution Foncière des Entreprises (CFE) sur le site des impôts français. Il télécharge automatiquement les documents en format PDF et les renomme en utilisant le code dossier, le nom de l'entreprise et le numéro SIREN, facilitant ainsi la gestion documentaire pour les professionnels et le classement dans la GED (Gestion Electronique des Données) du cabinet.
 
 ## Fonctionnalités
 
@@ -16,17 +16,16 @@ Ce script Python utilise Selenium pour automatiser la récupération des avis de
 
 - Python 3.8 ou supérieur.
 - Selenium WebDriver.
-- Google Chrome ou Chromium et ChromeDriver installés.
+- Mozila Firefox installé.
 
 ## Installation
 
 1. Clonez ce dépôt GitHub sur votre machine locale.
-3. Assurez-vous que ChromeDriver est installé et accessible dans votre PATH.
 
 ## Configuration
 
 1. Modifiez le fichier `identifiants.txt` pour inclure vos identifiants de connexion au site des impôts.
-2. Assurez-vous que le fichier `SIREN.TXT` contient la liste des numéros SIREN et des noms d'entreprises à traiter pour lesquels le cabinet a un accès délégué.
+2. Assurez-vous que votre fichier de SIREN contient la liste numéros SIREN, des noms d'entreprises, des codes dossiers à traiter pour lesquels le cabinet a un accès délégué, chaque ligne doit être au format suivant : `CODE DOSSIER;NOM;NUM DOSSIER`.
 
 ## Utilisation
 
