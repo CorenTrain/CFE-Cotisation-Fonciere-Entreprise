@@ -323,8 +323,10 @@ class Program:
         """
         # Création du nom du fichier avec l'année actuelle
         annee = datetime.now().year
-        nouveau_nom = f"{code}_{nom_entreprise.replace(' ', '_')}_{
-            siret.replace(' ', '')}_CFE_{annee}.pdf"
+        nouveau_nom = (
+            f"{code}_{nom_entreprise.replace(' ', '_')}_"
+            f"{siret.replace(' ', '')}_CFE_{annee}.pdf"
+        )
         chemin_source = os.path.join(dossier_telechargement, "Documents", "AvisCfe*.pdf")
 
         # Recherche du fichier PDF dans le répertoire spécifié
