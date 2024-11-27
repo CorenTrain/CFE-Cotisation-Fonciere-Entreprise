@@ -2,7 +2,6 @@
 import glob
 import logging
 import os
-import re
 import shutil
 import sys
 import threading
@@ -11,8 +10,6 @@ from datetime import datetime
 from itertools import islice
 from time import sleep
 from tkinter import messagebox
-
-import time
 
 
 from selenium import webdriver
@@ -326,8 +323,10 @@ class Program:
         """
         # Création du nom du fichier avec l'année actuelle
         annee = datetime.now().year
-        nouveau_nom = f"{code}_{nom_entreprise.replace(' ', '_')}_{
-            siret.replace(' ', '')}_CFE_{annee}.pdf"
+        nouveau_nom = (
+            f"{code}_{nom_entreprise.replace(' ', '_')}_"
+            f"{siret.replace(' ', '')}_CFE_{annee}.pdf"
+        )
         chemin_source = os.path.join(dossier_telechargement, "Documents", "AvisCfe*.pdf")
 
         # Recherche du fichier PDF dans le répertoire spécifié
@@ -344,8 +343,8 @@ class Program:
         os.rename(fichier_original, chemin_nouveau)
         os.makedirs(dossier_destination, exist_ok=True)
         shutil.move(chemin_nouveau, os.path.join(dossier_destination, nouveau_nom))
-        print(f"Le fichier renommé a été déplacé vers : {
-              os.path.join(dossier_destination, nouveau_nom)}")
+        print("Le fichier renommé a été déplacé vers :"
+              f"{os.path.join(dossier_destination, nouveau_nom)}")
 
     def fermer_fenetres(self):
         """
