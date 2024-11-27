@@ -2,6 +2,7 @@
 import glob
 import logging
 import os
+import re
 import shutil
 import sys
 import threading
@@ -11,13 +12,17 @@ from itertools import islice
 from time import sleep
 from tkinter import messagebox
 
-from cfe_tkinter import WindowApp
+import time
+
+
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
+from cfe_tkinter import WindowApp
 
 LIEN_IMPOTS = "https://cfspro.impots.gouv.fr/mire/accueil.do"
 
@@ -128,9 +133,6 @@ class Program:
             le nom de l'entreprise (str) et le numéro de dossier (str).
         """
         with open(chemin, "r", encoding="utf-8") as fichier:
-            # Ignorer la première ligne (en-tête)
-            # next(fichier)
-            # Utilisation d'une liste en compréhension pour extraire les données
             return [
                 tuple(ligne.strip().split(";", 3)[:3])
                 for ligne in fichier if len(ligne.strip().split(";", 3)) == 3
@@ -138,19 +140,22 @@ class Program:
 
     def afficher_warning(self):
         """
-        Affiche une boîte de dialogue Warning toujours au premier plan avec une icône personnalisée dans la barre des tâches.
+        Affiche une boîte de dialogue Warning toujours au premier
+        plan avec une icône personnalisée dans la barre des tâches.
         """
         # Créer une fenêtre temporaire
         root = tkinter.Tk()
-        root.title("Attention")  # Titre de la fenêtre
-        root.iconbitmap(".\\Ressources\\Icone_acces.ico")
-        root.geometry("2x2")  # Fenêtre minuscule invisible
-        root.deiconify()  # Rendre visible dans la barre des tâches
-        root.attributes("-topmost", True)  # Toujours au premier plan
+        root.title("Attention")
+        root.geometry("2x2")
+        root.deiconify()
+        root.attributes("-topmost", True)
 
         # Afficher la boîte de dialogue
         messagebox.showwarning(
-            "Attention", "Saisissez le captcha et cliquez sur le bouton de connexion.\n", parent=root)
+            "Attention",
+            "Saisissez le captcha et cliquez sur le bouton de connexion.\n",
+            parent=root
+        )
 
         # Détruire la fenêtre après fermeture de la boîte de dialogue
         root.destroy()
@@ -197,7 +202,7 @@ class Program:
             logging.error("Timeout lors de la connexion.")
             self.connexion_site(identifiant, mot_de_passe)
 
-    def traiter_siren(self, siren, nom_entreprise, code_dossier):
+    def traiter_siren(self, siren: str, nom_entreprise: str, code_dossier: str):
         """
         Traite un SIREN, un nom d'entreprise, et un code de dossier en ouvrant l'avis de CFE
         et en accédant au lien d'avis d'imposition associé.
@@ -209,14 +214,10 @@ class Program:
         """
         # Je tente d'accéder à la page des avis CFE
         # Si elle est présente et contient des avis, je passe à l'étape du téléchargement
-        if self.acceder_avis_cfe_du_siren(siren):
+        succes = self.acceder_avis_cfe_du_siren(siren)
+        if succes:
             self.traiter_lien_avis_imposition(code_dossier, nom_entreprise, siren)
-            self.avancee["dossiers_succes"] += 1
-        else:
-            self.avancee["dossiers_echec"] += 1
-            print("Aucun avis d'imposition trouvé.")
-        self.avancee["dossiers_traites"] += 1
-        self.avancee["dossiers_restants"] -= 1
+        maj_avancee(self, echec=not succes)
 
     def acceder_avis_cfe_du_siren(self, siren):
         """
@@ -283,20 +284,31 @@ class Program:
         """
         logging.info("Arrivée sur la page des avis d'imposition.")
 
-        # Obtention des lignes de document, s'il y en a, sinon retour
+        # Vérifier si aucun document n'est trouvé
+        try:
+            WebDriverWait(self.driver, 1).until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "div[class='messageTableau'] ul li")))
+            print("Pas de document trouvés.")
+            return
+        except TimeoutException:
+            pass
+
+        # Obtention des lignes de document s'il y en a, sinon retour
         try:
             lignes = WebDriverWait(self.driver, 3).until(
                 EC.presence_of_all_elements_located((By.XPATH, "//tbody/tr")))
         except TimeoutException:
-            print("Aucune ligne de document trouvée.")
+            print("Pas de document trouvés.")
             return
 
         # Clique sur le lien d'avis d'imposition pour chaque ligne et les renomme
         for ligne in lignes:
             cellules = ligne.find_elements(By.TAG_NAME, "td")
             if cellules:
-                cellules[7].click()
-                print("Clic sur le lien d'avis d'imposition.")
+
+                lien = ligne.find_element(By.TAG_NAME, "a")
+                lien.click()
+                logging.info("Clic sur le lien d'avis d'imposition.")
                 siret = f"{siren}{cellules[4].text.strip()}"
                 self.renommer_pdf_telecharge(code, nom, self.script_path, siret)
                 sleep(1)
@@ -376,7 +388,53 @@ def afficher_aide():
     print(aide_message)
 
 
+def gestion_erreur(siren: str, nom: str, code: str) -> bool:
+    """
+    Vérifie les erreurs dans les données fournies et journalise les anomalies.
+
+    :param siren: Numéro SIREN (doit contenir uniquement des chiffres et être valide).
+    :param nom: Nom associé au SIREN.
+    :param code: Code complémentaire (doit contenir uniquement des chiffres ou caractères valides).
+    :return: True si une condition d'erreur est vérifiée, sinon False.
+    """
+    # Vérification SIREN invalide
+    if siren == "000000000":
+        logging.info("SIREN invalide - %s", siren)
+        return True
+
+    # Vérification que le SIREN contient exactement 9 caractères
+    if len(siren) != 9:
+        logging.error("SIREN doit contenir exactement 9 caractères - %s", siren)
+        return True
+
+    # Vérification de données manquantes
+    if not all((siren, nom, code)):
+        logging.error("Données manquantes - SIREN: '%s', Nom: '%s', Code: '%s'", siren, nom, code)
+        return True
+
+    # Vérification si le SIREN contient des lettres
+    if not siren.isdigit():
+        logging.error("SIREN invalide - %s", siren)
+        return True
+
+    # Vérification si le code contient des lettres
+    if not code.isdigit():
+        logging.error("Code invalide - %s", code)
+        return True
+
+    # Si aucune erreur n'est détectée
+    return False
+
+
+def maj_avancee(app: Program, echec=False):
+    """Met à jour les données d'avancement de l'application."""
+    app.avancee["dossiers_traites"] += 1
+    app.avancee["dossiers_restants"] -= 1
+    app.avancee["dossiers_echec" if echec else "dossiers_succes"] += 1
+
+
 def traitement(app: Program, window_app: WindowApp):
+    """ Fonction de traitement des dossiers. """
     try:
         # Attente du clic sur le bouton ou fermeture de la fenêtre
         window_app.wait_variable(window_app.var_activite)
@@ -396,22 +454,51 @@ def traitement(app: Program, window_app: WindowApp):
         app.connexion_site(window_app.web_data["identifiant"], window_app.web_data["mot_de_passe"])
 
         for compteur, (siren, nom, code) in enumerate(app.donnees, start=1):
-            # Vérifier si la fenêtre a été fermée pendant le traitement
-            # pour savoir s'il faut arrêter
-            if window_app:
+            window_app.update_progression(app.avancee)
+            if gestion_erreur(siren, nom, code):
+                maj_avancee(app, echec=True)
+                continue
+
+            if not window_app:
                 print(f"Fenêtre fermée pendant le traitement. {compteur} dossiers traités.")
-                print(f"Compteur: {compteur} | SIREN: {siren}")
-                app.traiter_siren(siren, nom, code)
-                app.fermer_fenetres()
-                app.retour_accueil()
-                window_app.update_progression(app.avancee)
-            else:
                 return
+
+            print(f"Compteur: {compteur} | SIREN: {siren} | Nom: {nom} | Code: {code}")
+            app.traiter_siren(siren, nom, code)
+            app.fermer_fenetres()
+            app.retour_accueil()
+
+        window_app.update_progression(app.avancee)
         window_app.etat_app = "Programme terminé !"
 
     except Exception as e:
         print(f"Erreur : {e}")
         logging.exception("Erreur lors de l'exécution : %s", e)
+
+
+def config_logging():
+    """
+    Configure les gestionnaires de logs pour enregistrer les logs d'info et d'erreur
+    dans des fichiers séparés.
+    """
+    logger = logging.getLogger("mon_logger")
+    logger.setLevel(logging.DEBUG)
+
+    info_handler = logging.FileHandler("log_infos.txt", encoding='utf-8')
+    info_handler.setLevel(logging.INFO)
+    info_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    info_handler.setFormatter(info_formatter)
+
+    error_handler = logging.FileHandler("log_erreurs.txt", encoding='utf-8')
+    error_handler.setLevel(logging.ERROR)
+    error_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    error_handler.setFormatter(error_formatter)
+
+    if not logger.hasHandlers():
+        logger.addHandler(info_handler)
+        logger.addHandler(error_handler)
+
+    return logger
 
 
 def main():
@@ -421,12 +508,10 @@ def main():
     """
 
     print("Démarrage du script...")
-    logging.basicConfig(filename='log_infos.txt', level=logging.INFO,
-                        format='%(asctime)s - %(message)s', encoding='utf-8')
-    logging.basicConfig(filename='log_erreurs.txt', level=logging.ERROR,
-                        format='%(asctime)s - %(message)s', encoding='utf-8')
-
     # Initialisation des classes de l'application
+    logging.basicConfig(filename='log.txt', encoding='utf-8',
+                        level=logging.INFO, format='%(asctime)s - %(message)s')
+    logger = config_logging()
     app = Program()
     window_app = WindowApp()
 
@@ -438,6 +523,7 @@ def main():
     try:
         window_app.mainloop()
     except Exception as e:
+        logger.exception("Erreur lors de l'exécution de l'interface : %s", e)
         print(f"Erreur tkinter : {e}")
 
     if window_app.stopped:
