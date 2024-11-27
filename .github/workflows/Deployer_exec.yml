@@ -26,33 +26,41 @@ jobs:
           upload_exe_with_name: 'Telechargement_CFE.exe'
           options: --onefile, --name "Telechargement_CFE", --windowed
 
-      # Étape 3 : Vérifier et supprimer le tag existant
-      - name: Delete existing tag if present
+      # Étape 3 : Récupérer la version actuelle du tag
+      - name: Get current version tag
+        id: get_version
         run: |
-          TAG_NAME="v1.0.0"
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            git push --delete origin "$TAG_NAME"
-            git tag -d "$TAG_NAME"
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME=$(git describe --tags --abbrev=0)
+          echo "Current tag: $TAG_NAME"
+          echo "tag=$TAG_NAME" >> $GITHUB_ENV
 
-      # Étape 4 : Créer ou mettre à jour une Release GitHub
+      # Étape 4 : Incrémenter la version
+      - name: Increment version
+        id: increment_version
+        run: |
+          VERSION="${{ env.tag }}"
+          VERSION_NUMBER=$(echo $VERSION | sed 's/^v//')
+          VERSION_NUMBER=$(echo $VERSION_NUMBER | awk -F. -v OFS=. '{$NF++;print}')
+          NEW_TAG="v$VERSION_NUMBER"
+          echo "New tag: $NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_ENV
+
+      # Étape 5 : Créer ou mettre à jour une Release GitHub
       - name: Create or Update Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: "v1.0.0"
+          tag_name: ${{ env.new_tag }}
           release_name: "Téléchargement CFE - Release"
           body: |
-            Voici la dernière version de l'exécutable `Téléchargement CFE`.
+            Voici la dernière version de l'exécutable `Téléchargement CFE` (version ${{ env.new_tag }}).
             Téléchargez le fichier ci-dessous pour commencer.
           draft: false
           prerelease: false
 
-      # Étape 5 : Télécharger et ajouter l'exécutable à la Release
+      # Étape 6 : Télécharger et ajouter l'exécutable à la Release
       - name: Upload Executable to Release
         uses: actions/upload-release-asset@v1
         env:
