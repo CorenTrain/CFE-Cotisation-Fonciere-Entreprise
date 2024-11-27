@@ -17,11 +17,11 @@ jobs:
 
       # Étape 2 : Construire l'exécutable avec PyInstaller
       - name: Create Executable
-        uses: Martin005/pyinstaller-action@v1.2.0
+        uses: sayyid5416/pyinstaller@v1
         with:
           python_ver: '3.8'  # Version de Python à utiliser
+          pyinstaller_ver: '==5.13.2'
           spec: './recup_cfe.spec'
           requirements: './requirements.txt'  # Fichier des dépendances à installer
           upload_exe_with_name: 'Téléchargement_CFE.exe'  # Nom de l'exécutable à téléverser
-          options: >
-            --onefile, --name "Téléchargement_CFE", --windowed
+          options: --onefile, --name "Téléchargement_CFE", --windowed
