@@ -2,7 +2,6 @@
 import glob
 import logging
 import os
-import re
 import shutil
 import sys
 import threading
@@ -12,7 +11,6 @@ from itertools import islice
 from time import sleep
 from tkinter import messagebox
 
-import time
 
 
 from selenium import webdriver
