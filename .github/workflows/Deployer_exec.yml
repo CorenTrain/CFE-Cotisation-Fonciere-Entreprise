@@ -19,7 +19,7 @@ jobs:
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
         with:
-          python_ver: '3.8'  # Version de Python à utiliser
+          python_ver: '3.12.4'  # Version de Python à utiliser
           pyinstaller_ver: '==5.13.2'
           spec: './recup_cfe.py'
           requirements: './requirements.txt'  # Fichier des dépendances à installer
