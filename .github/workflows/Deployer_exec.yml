@@ -24,8 +24,4 @@ jobs:
           requirements: './requirements.txt'  # Fichier des dépendances à installer
           upload_exe_with_name: 'Téléchargement_CFE.exe'  # Nom de l'exécutable à téléverser
           options: >
-            --onefile
-            --collect-datas "selenium"
-            --collect-datas "customtkinter"
-            --name "Téléchargement_CFE"
-            --windowed
+            --onefile, --name "Téléchargement_CFE", --windowed
