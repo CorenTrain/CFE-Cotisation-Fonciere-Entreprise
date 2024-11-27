@@ -2,10 +2,9 @@ name: Build and Release Executable
 
 # Déclenchement du workflow
 on:
-  workflow_dispatch:  # Lancement manuel
-  pull_request:       # Déclenchement au merge d'une PR sur `main`
-    branches:
-      - main
+  push:
+    tags:
+      - 'v*.*.*'  # Déclenchement lors de la poussée de tags correspondant au format vX.Y.Z
 
 jobs:
   pyinstaller-build:
@@ -26,41 +25,28 @@ jobs:
           upload_exe_with_name: 'Telechargement_CFE.exe'
           options: --onefile, --name "Telechargement_CFE", --windowed
 
-      # Étape 3 : Récupérer la version actuelle du tag
-      - name: Get current version tag
-        id: get_version
+      # Étape 3 : Extraire la version du tag
+      - name: Extract tag version
         run: |
-          TAG_NAME=$(git describe --tags --abbrev=0)
-          echo "Current tag: $TAG_NAME"
-          echo "tag=$TAG_NAME" >> $GITHUB_ENV
+          TAG_NAME="${GITHUB_REF#refs/tags/}"  # Extraction du tag
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV  # Sauvegarde la version dans une variable d'environnement
 
-      # Étape 4 : Incrémenter la version
-      - name: Increment version
-        id: increment_version
-        run: |
-          VERSION="${{ env.tag }}"
-          VERSION_NUMBER=$(echo $VERSION | sed 's/^v//')
-          VERSION_NUMBER=$(echo $VERSION_NUMBER | awk -F. -v OFS=. '{$NF++;print}')
-          NEW_TAG="v$VERSION_NUMBER"
-          echo "New tag: $NEW_TAG"
-          echo "new_tag=$NEW_TAG" >> $GITHUB_ENV
-
-      # Étape 5 : Créer ou mettre à jour une Release GitHub
+      # Étape 4 : Créer ou mettre à jour une Release GitHub
       - name: Create or Update Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.new_tag }}
+          tag_name: ${{ env.TAG_NAME }}  # Utilisation du tag extrait
           release_name: "Téléchargement CFE - Release"
           body: |
-            Voici la dernière version de l'exécutable `Téléchargement CFE` (version ${{ env.new_tag }}).
+            Voici la dernière version de l'exécutable `Téléchargement CFE` (version ${{ env.TAG_NAME }}).
             Téléchargez le fichier ci-dessous pour commencer.
           draft: false
           prerelease: false
 
-      # Étape 6 : Télécharger et ajouter l'exécutable à la Release
+      # Étape 5 : Télécharger et ajouter l'exécutable à la Release
       - name: Upload Executable to Release
         uses: actions/upload-release-asset@v1
         env:
