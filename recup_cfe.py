@@ -343,8 +343,8 @@ class Program:
         os.rename(fichier_original, chemin_nouveau)
         os.makedirs(dossier_destination, exist_ok=True)
         shutil.move(chemin_nouveau, os.path.join(dossier_destination, nouveau_nom))
-        print(f"Le fichier renommé a été déplacé vers : {
-              os.path.join(dossier_destination, nouveau_nom)}")
+        print("Le fichier renommé a été déplacé vers :"
+              f"{os.path.join(dossier_destination, nouveau_nom)}")
 
     def fermer_fenetres(self):
         """
