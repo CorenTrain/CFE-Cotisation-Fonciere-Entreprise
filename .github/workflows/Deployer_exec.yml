@@ -1,0 +1,30 @@
+# This is a basic workflow that is manually triggered
+
+name: Manual workflow
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI
+# or API.
+on:
+  workflow_dispatch:
+
+jobs:
+  pyinstaller-build:
+    runs-on: windows-latest
+    steps:
+      # Étape 1 : Cloner le dépôt
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Étape 2 : Construire l'exécutable avec PyInstaller
+      - name: Create Executable
+        uses: Martin005/pyinstaller-action@v1.2.0
+        with:
+          python_ver: '3.8'  # Version de Python à utiliser
+          requirements: 'requirements.txt'  # Fichier des dépendances à installer
+          upload_exe_with_name: 'Téléchargement_CFE.exe'  # Nom de l'exécutable à téléverser
+          options: > 
+            --onefile 
+            --collect-datas "selenium" 
+            --collect-datas "customtkinter" 
+            --name "Téléchargement_CFE"
+            --windowed
