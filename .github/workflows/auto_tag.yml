@@ -2,12 +2,12 @@ name: Incrémente la version
 on:
   push:
     branches:
-      - master
+      - main
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@main
+    - uses: actions/checkout@master
     - name: Incrémente la version et pousse le tag
       uses: anothrNick/github-tag-action@master
       env:
