@@ -12,7 +12,6 @@ from time import sleep
 from tkinter import messagebox
 
 
-
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By

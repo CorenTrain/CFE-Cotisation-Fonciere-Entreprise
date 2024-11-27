@@ -20,7 +20,7 @@ jobs:
         uses: Martin005/pyinstaller-action@v1.2.0
         with:
           python_ver: '3.8'  # Version de Python à utiliser
-          spec: './build.spec'
+          spec: './recup_cfe.spec'
           requirements: './requirements.txt'  # Fichier des dépendances à installer
           upload_exe_with_name: 'Téléchargement_CFE.exe'  # Nom de l'exécutable à téléverser
           options: >
